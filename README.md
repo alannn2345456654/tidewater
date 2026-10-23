@@ -81,3 +81,6 @@ Las torres miden `WALL_H` (156 px), 36 px mas que el agua alta: el agua nunca la
 - Basura de mar: conchas y redes viejas; los huesos de pez quedan solo junto al pelicano (S2, columnas 14-17).
 - Limo, algas y percebes en la base de torres y pozos. Goteras del techo con ondas en el agua. Vapor de humedad muy tenue.
 - Luz por seccion: S1 gris oscura, S2 verdosa, S3 azul; la meta tiene luz de afuera. `?look=color` sigue mostrando el fondo original.
+
+## v12
+- Salto un poco mas alto: `JUMP_V` de -353 a -385 (altura ~52 px -> ~62 px). El cangrejo conserva su tamano y su caja de dano; el margen para saltarlo sube de ~16 px a ~32 px. Se dejo en 62 px (no mas) para que el salto bajo los pinchos de techo de S3 siga libre con el agua baja.

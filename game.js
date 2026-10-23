@@ -12,7 +12,7 @@ const SC = 18, NSEC = 3, LW = SC * NSEC * T;      // columnas por seccion, ancho
 const HIGH_H = 3 * T, LOW_H = 3;                 // altura del agua alta / baja
 const WALL_H = HIGH_H + 36;                       // las torres sobresalen 36 px del agua alta: el agua nunca las rebasa
 const CLIMB_MAX = 50;                             // el saltito de trepar solo funciona si la cima esta a <= 50 px sobre la superficie
-const PW = 28, PH = 36, SPEED = 170, JUMP_V = -353;
+const PW = 28, PH = 36, SPEED = 170, JUMP_V = -385;
 const SPIKE_H = 26;
 const FILL_T = 3.0, DRAIN_T = 1.6, COOLDOWN_EXTRA = 700;   // s para llenar / vaciar; ms extra de espera antes de volver a jalar
 const START_HIGH = [false, false, true];          // la seccion 3 empieza inundada
