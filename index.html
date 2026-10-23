@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
@@ -45,28 +45,28 @@
 <body>
 <div id="game"></div>
 <div id="prog"><i id="prog-dot"></i></div>
-<div id="title"><h1>TIDEWATER</h1><button id="play">Jugar</button><small>o presiona cualquier tecla</small><button id="title-cfg">Ajustes</button></div>
-<button id="cfg" title="Ajustes (Esc)">⚙</button>
-<div id="panel"><h2 style="margin:0">Ajustes</h2>
-  <label>Música <input id="vol-music" type="range" min="0" max="100"></label>
-  <label>Efectos <input id="vol-sfx" type="range" min="0" max="100"></label>
-  <label>Silencio (M) <input id="mute-opt" type="checkbox"></label>
-  <label>Mostrar hitboxes (H) <input id="hit-opt" type="checkbox"></label>
-  <button id="panel-close">Cerrar</button></div>
-<button id="mute" title="Sonido (M)">🔊</button>
+<div id="title"><h1>TIDEWATER</h1><button id="play">Play</button><small>or press any key</small><button id="title-cfg">Settings</button></div>
+<button id="cfg" title="Settings (Esc)">⚙</button>
+<div id="panel"><h2 style="margin:0">Settings</h2>
+  <label>Music <input id="vol-music" type="range" min="0" max="100"></label>
+  <label>Effects <input id="vol-sfx" type="range" min="0" max="100"></label>
+  <label>Mute (M) <input id="mute-opt" type="checkbox"></label>
+  <label>Show hitboxes (H) <input id="hit-opt" type="checkbox"></label>
+  <button id="panel-close">Close</button></div>
+<button id="mute" title="Sound (M)">🔊</button>
 <div id="touch">
   <div><button id="t-left">◀</button><button id="t-right">▶</button></div>
   <div><button id="t-pull">○</button><button id="t-jump">▲</button></div>
 </div>
 <div id="end">
-  <h2>¡Nivel completo!</h2>
+  <h2>Level complete!</h2>
   <div id="end-stats"></div>
   <div id="rate-wrap">
-    <p>¿Qué tan justo se sintió fallar?<br><small>1 = muy injusto · 5 = muy justo</small></p>
+    <p>How fair did failing feel?<br><small>1 = very unfair · 5 = very fair</small></p>
     <div id="rate"><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button></div>
   </div>
-  <div id="thanks">¡Gracias!</div>
-  <button id="again">Jugar de nuevo</button>
+  <div id="thanks">Thank you!</div>
+  <button id="again">Play again</button>
 </div>
 <script src="vendor/phaser.min.js"></script>
 <script src="sprites.js"></script>

@@ -219,7 +219,7 @@ function bindTouch() {
 function bindMute() {
   const el = document.getElementById('mute'); if (!el) return;
   if (!SFX.available) { el.style.display = 'none'; return; }
-  const paint = function () { el.textContent = SFX.isMuted() ? '\uD83D\uDD07' : '\uD83D\uDD0A'; el.title = SFX.isMuted() ? 'Sonido apagado (M)' : 'Sonido (M)'; };
+  const paint = function () { el.textContent = SFX.isMuted() ? '\uD83D\uDD07' : '\uD83D\uDD0A'; el.title = SFX.isMuted() ? 'Sound off (M)' : 'Sound (M)'; };
   SFX.onToggle = paint; paint();
   el.addEventListener('click', function (e) { SFX.unlock(); SFX.toggle(); e.currentTarget.blur(); });
 }
@@ -259,7 +259,7 @@ function padEnd(P) {   // control en la pantalla final: izq/der elige, A confirm
 function showEnd(stats, again) {
   const end = document.getElementById('end');
   document.getElementById('end-stats').textContent =
-    'Tiempo: ' + stats.time + ' s · Intentos fallidos: ' + stats.deaths + ' · Gema: ' + (stats.gem ? 'si' : 'no');
+    'Time: ' + stats.time + ' s · Failed attempts: ' + stats.deaths + ' · Gem: ' + (stats.gem ? 'yes' : 'no');
   const rate = document.getElementById('rate-wrap');
   const thanks = document.getElementById('thanks');
   rate.style.display = 'block'; thanks.style.display = 'none';
@@ -456,7 +456,7 @@ class Level extends Phaser.Scene {
     for (let i = 0; i < 16; i++) drawStain(back, 40 + i * (LW / 16) + rnd() * 90, 70 + rnd() * 240, 60 + rnd() * 70, 40 + rnd() * 50);
     for (let s = 0; s < NSEC; s++) {
       drawGrate(back, colx(s, 1) + 190 + (s === 1 ? 20 : 0), 52, 46, 22);
-      this.add.text(colx(s, 1) + 30, 56, 'TRAMO ' + (s + 1), { fontFamily: 'monospace', fontSize: '12px', color: '#8f7f66' }).setAlpha(0.45).setDepth(0.45);
+      this.add.text(colx(s, 1) + 30, 56, 'SECTION ' + (s + 1), { fontFamily: 'monospace', fontSize: '12px', color: '#8f7f66' }).setAlpha(0.45).setDepth(0.45);
     }
     // oxido: tuberias horizontales viejas en el fondo (las azules del juego siguen azules)
     back.fillStyle(0x4a3424, 0.7);
@@ -1018,7 +1018,7 @@ class Level extends Phaser.Scene {
       if (!this.padSeen) {
         this.padSeen = true;
         const kh = document.getElementById('keys');
-        if (kh) { kh.style.display = ''; kh.textContent += ' · 🎮 stick/cruceta mover · A saltar · X o B jalar · Start reiniciar'; }
+        if (kh) { kh.style.display = ''; kh.textContent += ' · 🎮 stick/d-pad move · A jump · X or B pull · Start restart'; }
       }
     }
     this.padPrev = cur;

@@ -76,7 +76,7 @@ Las torres miden `WALL_H` (156 px), 36 px mas que el agua alta: el agua nunca la
 - Techo izquierdo de S3 acortado a 3 casillas (igual que el derecho); el cuerpo físico al nadar cubre todo el dibujo para no traspasar torres.
 
 ## v11: drenaje pluvial costero (solo decoracion)
-- Escenario: tunel de drenaje que desemboca al mar. Arcos de concreto, manchas de humedad, rejillas oxidadas, numeros de tramo y tuberias viejas en el fondo.
+- Escenario: tunel de drenaje que desemboca al mar. Arcos de concreto, manchas de humedad, rejillas oxidadas, numeros de seccion (en ingles) y tuberias viejas en el fondo.
 - Quitado: arboles y ramas de pie, telaranas sobre torres y techos solidos, niebla. Reducido: 4 telaranas en esquinas altas, 2 aranas pegadas al techo, 4 cadenas cortas, 5 raices cortas.
 - Basura de mar: conchas y redes viejas; los huesos de pez quedan solo junto al pelicano (S2, columnas 14-17).
 - Limo, algas y percebes en la base de torres y pozos. Goteras del techo con ondas en el agua. Vapor de humedad muy tenue.
