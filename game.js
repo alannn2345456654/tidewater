@@ -286,6 +286,128 @@ function drawSpikes(g, x, y, w, dir, st, alpha) {
   }
 }
 
+
+// ---- Enemigos en silueta (estilo Limbo): negro con un filo apenas mas claro y ojos que brillan ----
+const INK = 0x070b10, RIM = 0x2a3d4a, EYE = 0xdfe8ee;
+function rimEllipse(G, cx, cy, rx, ry, a0, a1, w, alpha) {   // arco del borde superior de una elipse (el "filo" de luz)
+  G.lineStyle(w || 1.5, RIM, alpha === undefined ? 0.9 : alpha); G.beginPath();
+  for (let i = 0; i <= 14; i++) { const a = a0 + (a1 - a0) * i / 14; const px = cx + Math.cos(a) * rx, py = cy + Math.sin(a) * ry; if (i === 0) G.moveTo(px, py); else G.lineTo(px, py); }
+  G.strokePath();
+}
+function eyeGlow(G, x, y, r) { G.fillStyle(EYE, 0.14); G.fillCircle(x, y, r * 2.8); G.fillStyle(EYE, 1); G.fillCircle(x, y, r); G.fillStyle(INK, 1); }
+
+function drawCrab(G, x, gy, time) {   // cangrejo visto de frente: caparazon bajo, dos pinzas grandes, tres patas articuladas por lado
+  const cy = gy - 13, op = Math.sin(time / 230) * 1.6;
+  G.fillStyle(INK, 1);
+  for (let s = -1; s <= 1; s += 2) {
+    for (let i = 0; i < 3; i++) {
+      const lf = Math.sin(time / 85 + i * 2.1 + (s > 0 ? Math.PI : 0)), lift = Math.max(0, lf) * 3.2;
+      const sx = x + s * (9 + i * 2.5), sy = cy + 3 + i * 0.8;                    // sale del vientre
+      const kx = x + s * (19 + i * 5), ky = cy - 9 - (2 - i) * 2.2 - lift;           // rodilla alta (articulacion marcada)
+      const fx = x + s * (26 + i * 6), fy = gy - 1 - lift * 0.6;                   // pie en el suelo
+      G.lineStyle(3.2 - i * 0.3, INK, 1); G.lineBetween(sx, sy, kx, ky); G.lineBetween(kx, ky, fx, fy);
+      G.fillCircle(kx, ky, 1.9);
+    }
+    // brazo y pinza grande: forma de boca abierta (dos cuernos) mirando hacia adentro y arriba
+    const ex = x + s * 19, ey = cy - 4, px = x + s * 24, py = cy - 12;
+    G.lineStyle(4.6, INK, 1); G.lineBetween(x + s * 12, cy + 1, ex, ey); G.lineBetween(ex, ey, px, py + 3);
+    G.fillCircle(ex, ey, 3);
+    const mc = (s > 0 ? 235 : 305) * Math.PI / 180, gap = (24 + op * 4) * Math.PI / 180, a0 = mc + gap, a1 = mc - gap + 2 * Math.PI, pts = [{ x: px, y: py }];
+    for (let i = 0; i <= 22; i++) { const t = i / 22, th = a0 + (a1 - a0) * t, r = 8.5 + 7 * (Math.pow(1 - t, 7) + Math.pow(t, 7)); pts.push({ x: px + Math.cos(th) * r, y: py + Math.sin(th) * r }); }
+    G.fillStyle(INK, 1); G.fillPoints(pts, true);
+    G.lineStyle(1.2, RIM, 0.85); G.beginPath();
+    for (let i = 3; i <= 14; i++) { const q = pts[i + 1]; if (i === 3) G.moveTo(q.x, q.y); else G.lineTo(q.x, q.y); } G.strokePath();
+  }
+  G.fillStyle(INK, 1); G.fillEllipse(x, cy, 38, 18); G.fillEllipse(x, cy - 3, 30, 14);   // caparazon
+  rimEllipse(G, x, cy - 1, 18, 9, Math.PI + 0.25, 2 * Math.PI - 0.25, 1.4, 0.8);
+  G.lineStyle(1, RIM, 0.55); G.lineBetween(x - 6, cy - 8, x - 3, cy + 1); G.lineBetween(x + 6, cy - 8, x + 3, cy + 1);   // surcos del caparazon
+  G.lineStyle(2, INK, 1);
+  for (let s = -1; s <= 1; s += 2) { G.lineBetween(x + s * 4, cy - 6, x + s * 5, cy - 12); eyeGlow(G, x + s * 5, cy - 13, 1.7); }   // ojos en tallos
+  G.lineStyle(3, INK, 1);
+}
+
+const BIRD_K = 1.3;   // escala del dibujo del ave (la caja de dano se calcula con la misma escala)
+function drawBird(G, ox, oy, d, st, time) {   // ave carronera: cuello pelado, pico ganchudo, alas largas con plumas separadas
+  G.save(); G.translateCanvas(ox, oy); G.scaleCanvas(BIRD_K, BIRD_K); const x = 0, y = 0;
+  drawBirdLocal(G, x, y, d, st, time); G.restore();
+}
+function drawBirdLocal(G, x, y, d, st, time) {
+  const flap = Math.sin(time / (st === 'warn' ? 50 : 150));
+  G.fillStyle(INK, 1);
+  if (st === 'dive' || st === 'stay') {   // picada: alas pegadas hacia atras, cuerpo vertical, pico abajo
+    G.fillTriangle(x - 4, y - 8, x + 4, y - 8, x, y - 26);                                   // cola
+    G.fillEllipse(x, y - 2, 15, 26);                                                          // cuerpo
+    G.fillTriangle(x - 6, y - 10, x - 17, y - 22, x - 5, y + 8); G.fillTriangle(x + 6, y - 10, x + 17, y - 22, x + 5, y + 8);   // alas hacia atras
+    G.lineStyle(1.3, RIM, 0.8); G.lineBetween(x - 17, y - 22, x - 5, y + 8); G.lineBetween(x + 17, y - 22, x + 5, y + 8);
+    G.fillStyle(INK, 1); G.fillRect(x - 2.5, y + 8, 5, 10);                                  // cuello
+    G.fillCircle(x, y + 20, 5);                                                                // cabeza
+    G.fillTriangle(x - 3.5, y + 22, x + 3.5, y + 22, x, y + 40); G.fillTriangle(x - 1, y + 36, x + 1, y + 36, x + 3, y + 42);   // pico ganchudo
+    eyeGlow(G, x + d * 2.5, y + 19, 1.3);
+    return;
+  }
+  const hgt = 0.62 + 0.38 * flap;   // altura del ala: baja y sube con el aleteo
+  const FEATH = [[2, 0], [0, -14], [-9, -37], [-20, -30], [-18, -26], [-26, -22], [-21, -19], [-30, -13], [-23, -11], [-28, -5], [-18, -3], [-14, 2]];   // contorno del ala (u = hacia adelante, v = hacia arriba)
+  const wing = function (ox, oy, sc, lag) {
+    const pts = FEATH.map(function (q, i) { const tip = i >= 2 && i <= 9; return { x: ox + d * q[0] * sc, y: oy + q[1] * sc * hgt + (tip ? lag : 0) }; });
+    G.fillStyle(INK, 1); G.fillPoints(pts, true);
+    G.lineStyle(1.3, RIM, 0.75); G.lineBetween(pts[0].x, pts[0].y, pts[1].x, pts[1].y); G.lineBetween(pts[1].x, pts[1].y, pts[2].x, pts[2].y);
+  };
+  wing(x + d * 9, y - 4, 0.8, 2 - flap * 2);   // ala lejana (mas chica)
+  G.fillStyle(INK, 1);
+  G.fillTriangle(x - d * 12, y - 2, x - d * 12, y + 5, x - d * 34, y + 10 + flap * 1.5);       // cola
+  G.fillTriangle(x - d * 16, y, x - d * 16, y + 3, x - d * 36, y + 4);
+  G.fillEllipse(x, y, 34, 15);                                                                 // cuerpo
+  rimEllipse(G, x, y, 17, 7.5, Math.PI + 0.3, 2 * Math.PI - 0.5, 1.3, 0.7);
+  G.lineStyle(5, INK, 1); G.lineBetween(x + d * 11, y - 2, x + d * 19, y - 9);                // cuello largo
+  G.fillStyle(INK, 1); G.fillCircle(x + d * 21, y - 10, 5);                                    // cabeza
+  G.fillTriangle(x + d * 24, y - 13, x + d * 24, y - 7, x + d * 36, y - 6);                  // pico
+  G.fillTriangle(x + d * 31, y - 7, x + d * 36, y - 6, x + d * 33, y - 1);                   // gancho
+  eyeGlow(G, x + d * 22, y - 11, 1.4);
+  wing(x + d * 1, y - 3, 1.05, -flap * 2);        // ala cercana
+}
+
+
+// ---- Decoracion de ambiente (estilo Limbo): solo adorno, sin colision. Se omite con ?look=color (condicion de control) ----
+function mulberry(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function drawWeb(g, x, y, r, sx, sy, alpha) {   // telarana de esquina: radios desde (x, y) hacia (sx, sy) y hilos que cuelgan entre ellos
+  const a = alpha === undefined ? 0.26 : alpha, N = 5, R = 5, ang = [];
+  for (let i = 0; i <= N; i++) ang.push(i / N * Math.PI / 2);
+  g.lineStyle(1, 0xb9c8d4, a);
+  for (let i = 0; i <= N; i++) g.lineBetween(x, y, x + Math.cos(ang[i]) * r * sx, y + Math.sin(ang[i]) * r * sy);
+  for (let k = 1; k <= R; k++) {
+    const rr = r * k / R * (0.78 + 0.22 * (k / R));
+    for (let i = 0; i < N; i++) {
+      const x0 = x + Math.cos(ang[i]) * rr * sx, y0 = y + Math.sin(ang[i]) * rr * sy, x1 = x + Math.cos(ang[i + 1]) * rr * sx, y1 = y + Math.sin(ang[i + 1]) * rr * sy;
+      const mx = (x0 + x1) / 2 - (x0 + x1 - 2 * x) * 0.035, my = (y0 + y1) / 2 - (y0 + y1 - 2 * y) * 0.035;   // el hilo se hunde hacia la esquina
+      g.beginPath(); g.moveTo(x0, y0); g.lineTo(mx, my); g.lineTo(x1, y1); g.strokePath();
+    }
+  }
+}
+function drawBranch(g, x, y, ang, len, w, rnd) {   // rama seca: se bifurca y se adelgaza
+  const x2 = x + Math.cos(ang) * len, y2 = y + Math.sin(ang) * len;
+  g.lineStyle(w, 0x050d14, 0.95); g.lineBetween(x, y, x2, y2);
+  if (len < 9) return;
+  const n = len > 40 ? 3 : 2;
+  for (let i = 0; i < n; i++) drawBranch(g, x2 - Math.cos(ang) * len * 0.15 * i, y2 - Math.sin(ang) * len * 0.15 * i, ang + (rnd() - 0.5) * 1.3, len * (0.55 + rnd() * 0.2), Math.max(1, w * 0.68), rnd);
+}
+function drawBones(g, x, y, k) {   // espina de pez en el suelo
+  g.lineStyle(1.6, 0x6f8591, 0.55); g.lineBetween(x, y - 3, x + 34 * k, y - 3);
+  for (let i = 1; i < 7; i++) { const bx = x + i * 5 * k, h = 6 - Math.abs(i - 3) * 0.9; g.lineBetween(bx, y - 3, bx - 1.5 * k, y - 3 - h); g.lineBetween(bx, y - 3, bx - 1.5 * k, y - 3 + h * 0.4); }
+  g.lineBetween(x + 34 * k, y - 3, x + 42 * k, y - 8); g.lineBetween(x + 34 * k, y - 3, x + 42 * k, y + 1);   // cola
+  g.strokeEllipse(x - 5 * k, y - 4, 11, 8); g.fillStyle(0x6f8591, 0.5); g.fillCircle(x - 6 * k, y - 5, 1.2);   // craneo
+}
+function chainLinks(g, x0, y0, len, sway, time, ph) {
+  const n = Math.floor(len / 9);
+  g.lineStyle(1.6, 0x2d4352, 0.9);
+  for (let i = 0; i < n; i++) {
+    const t = i / n, ox = Math.sin(time / 1500 + ph) * sway * t * t, y = y0 + i * 9;
+    g.strokeEllipse(x0 + ox, y + 4, i % 2 ? 3 : 5, 8);
+  }
+  const tx = x0 + Math.sin(time / 1500 + ph) * sway, ty = y0 + n * 9;
+  g.fillStyle(0x16222c, 1); g.fillTriangle(tx - 5, ty + 2, tx + 5, ty + 2, tx, ty + 14);   // gancho
+  g.lineStyle(1.4, 0x3c5565, 0.9); g.beginPath(); g.moveTo(tx - 5, ty + 2); g.lineTo(tx, ty + 14); g.lineTo(tx + 5, ty + 2); g.strokePath();
+}
+
 const HERO_H = 78;
 const PULL_T = 700;   // duracion (ms) de la animacion de agarrar / jalar el tapon   // alto en pantalla del personaje de pie (px)
 
@@ -295,6 +417,46 @@ class Level extends Phaser.Scene {
   constructor() { super('Level'); }
 
   preload() { Object.keys(HERO_IMGS).forEach(function (k) { this.load.image('h_' + k, HERO_IMGS[k]); }, this); }
+
+
+  addDecor() {
+    this.decorOn = !document.body.classList.contains('color');
+    if (!this.decorOn) return;
+    const rnd = mulberry(7), far = this.add.graphics().setDepth(0.4), webs = this.add.graphics().setDepth(0.95), floorG = this.add.graphics().setDepth(2.7);
+    // ramas secas al fondo: nacen del suelo (y algunas raices cuelgan del techo)
+    for (let i = 0; i < 9; i++) { const x = 60 + i * (LW / 9) + rnd() * 80; drawBranch(far, x, GY + 2, -Math.PI / 2 + (rnd() - 0.5) * 0.35, 80 + rnd() * 70, 5 + rnd() * 2, rnd); }
+    for (let i = 0; i < 7; i++) { const x = 130 + i * (LW / 7) + rnd() * 100; drawBranch(far, x, -4, Math.PI / 2 + (rnd() - 0.5) * 0.4, 40 + rnd() * 50, 4 + rnd(), rnd); }
+    // telaranas: esquinas del techo, esquinas de los techos solidos (por arriba, lejos de los pinchos) y las cimas de las torres
+    for (let s = 0; s < NSEC; s++) { drawWeb(webs, colx(s, 1), 0, 70 + rnd() * 20, 1, 1); drawWeb(webs, colx(s, SC) + T, 0, 60 + rnd() * 25, -1, 1); }
+    CEIL_SOLIDS.forEach(function (c) { const x0 = colx(c.s, c.a), x1 = colx(c.s, c.b) + T, y = GY - 5 * T; drawWeb(webs, x0, y, 46, -1, -1, 0.3); drawWeb(webs, x1, y, 46, 1, -1, 0.3); }, this);
+    WALLS.forEach(function (wl) { const x = colx(wl.s, wl.c); drawWeb(webs, x + T, GY - WALL_H, 30, 1, -1, 0.3); }, this);
+    drawWeb(webs, colx(1, 1) + 400, 0, 55, 1, 1, 0.2);
+    // huesos en el suelo
+    [[0, 8, 1], [1, 3, -1], [2, 2, 1], [2, 14, -1]].forEach(function (b) { drawBones(floorG, colx(b[0], b[1]) + 6, GY, b[2]); });
+    this.decorG = this.add.graphics().setDepth(0.9);   // cadenas, arana y niebla (se animan)
+    this.fogG = this.add.graphics().setDepth(1.2);
+    this.chains = [[colx(0, 3) + 12, 90], [colx(0, 9) + 18, 120], [colx(0, 16), 70], [colx(1, 5) + 8, 110], [colx(1, 11) + 20, 80], [colx(1, 17) + 6, 130], [colx(2, 7) + 14, 100], [colx(2, 12) + 10, 75]];
+    this.spiders = [[colx(0, 6) + 20, 70], [colx(1, 14) + 12, 55], [colx(2, 4) + 25, 85]];
+  }
+
+  updateDecor(time) {
+    if (!this.decorOn) return;
+    const g = this.decorG; g.clear();
+    this.chains.forEach(function (c, i) { chainLinks(g, c[0], 0, c[1], 6 + (i % 3) * 2, time, i * 1.7); }, this);
+    this.spiders.forEach(function (sp, i) {
+      const x = sp[0], y = sp[1] + Math.sin(time / 900 + i * 2) * 5;
+      g.lineStyle(1, 0xb9c8d4, 0.35); g.lineBetween(x, 0, x, y);
+      g.fillStyle(0x03080c, 1); g.fillCircle(x, y, 3.2); g.fillCircle(x, y + 5, 2.2);
+      g.lineStyle(1.1, 0x03080c, 1);
+      for (let j = -1; j <= 1; j += 2) for (let k = 0; k < 4; k++) { const ky = y - 2 + k * 2.6; g.lineBetween(x, ky, x + j * 7, ky - 3 + (k % 2) * 4); g.lineBetween(x + j * 7, ky - 3 + (k % 2) * 4, x + j * 9, ky + 3); }
+      g.fillStyle(0xdfe8ee, 0.8); g.fillCircle(x - 1, y - 0.5, 0.7); g.fillCircle(x + 1, y - 0.5, 0.7);
+    });
+    const f = this.fogG; f.clear();
+    for (let i = 0; i < 9; i++) {   // niebla baja que se desplaza despacio
+      const sp = (i % 2 ? 1 : -0.7) * 0.012, x = ((i * 310 + time * sp) % (LW + 600) + LW + 600) % (LW + 600) - 300;
+      f.fillStyle(0xb7d3e4, 0.035 + (i % 3) * 0.01); f.fillEllipse(x, GY - 14 - (i % 4) * 22, 520 + (i % 3) * 120, 46 + (i % 2) * 20);
+    }
+  }
 
   surfY(s) { const w = this.waters[s]; return GY - (LOW_H + (HIGH_H - LOW_H) * w.level); }
 
@@ -425,6 +587,7 @@ class Level extends Phaser.Scene {
     }
     this.flowG = this.add.graphics().setDepth(1.4);
     this.lastSplash = 0;
+    this.addDecor();
 
     // Monedas (solo guia) y gema
     const addCoin = function (scene, s, c, y) {
@@ -637,6 +800,7 @@ class Level extends Phaser.Scene {
       SFX.ambience(this.floatingNow, Phaser.Math.Clamp(1 - pd / 450, 0, 1));
     }
 
+    this.updateDecor(time);
     this.drawSkin(time);
     const PAD = this.readPad();
     if (Phaser.Input.Keyboard.JustDown(this.keys.m)) SFX.toggle();
@@ -901,11 +1065,9 @@ class Level extends Phaser.Scene {
     for (let i = 0; i < this.en.length; i++) {
       const e = this.en[i], z = zoneOf(e.x), hi = this.waters[z].level;
       if (e.t === 'crab') {
-        patrol(e); const x = e.x, y = GY - 12, k = Math.sin(time / 90) * 3;
-        G.fillEllipse(x, y, 34, 18);
-        for (let j = -1; j <= 1; j += 2) { G.lineBetween(x + j * 8, y + 5, x + j * 16, y + 11 + k * j); G.lineBetween(x + j * 4, y + 6, x + j * 9, y + 12 - k * j); G.fillCircle(x + j * 18, y - 7, 5); }
-        G.fillStyle(0xdfe8ee, 1); G.fillCircle(x - 4, y - 3, 1.6); G.fillCircle(x + 4, y - 3, 1.6); G.fillStyle(0x070b10, 1);
-        if (hit(x, y, 34, 22)) { this.die('crab', sec); return true; }
+        patrol(e); const x = e.x, y = GY - 12;
+        drawCrab(G, x, GY, time);
+        if (hit(x, GY - 15, 64, 30)) { this.die('crab', sec); return true; }
       } else {   // pelicano: vuela alto; si el agua esta alta avisa, se lanza en picada, se queda un instante y sube
         const yFly = GY - HIGH_H - 90, yS = this.surfY(z) + 4; e.tm -= dt;
         if (e.st === 'fly') { patrol(e); e.y = yFly + Math.sin(time / 300 + e.x0) * 5; if (e.tm <= 0) { if (hi > 0.85) { e.st = 'warn'; e.tm = 0.7; } else e.tm = 2; } }
@@ -913,12 +1075,10 @@ class Level extends Phaser.Scene {
         else if (e.st === 'dive') { const p = 1 - Math.max(0, e.tm) / 0.3; e.y = yFly + (yS - yFly) * p * p; if (e.tm <= 0) { e.st = 'stay'; e.tm = 0.35; SFX.splash(); this.burst(e.x, yS, 0x9ad0ff, 8, 60, -60); } }
         else if (e.st === 'stay') { e.y = yS; if (e.tm <= 0) { e.st = 'rise'; e.tm = 0.7; } }
         else { patrol(e); e.y = yFly + (yS - yFly) * (Math.max(0, e.tm) / 0.7); if (e.tm <= 0) { e.st = 'fly'; e.tm = 3 + Math.random() * 3; } }
-        const x = e.x, y = e.y, d = e.dir, diving = e.st === 'dive' || e.st === 'stay', f = Math.sin(time / (e.st === 'warn' ? 50 : 140)) * 9;
+        const x = e.x, y = e.y, d = e.dir, diving = e.st === 'dive' || e.st === 'stay';
         if (e.st === 'warn') { G.lineStyle(2, 0xcfe8ff, 0.5); G.strokeEllipse(x, yS, 44 + Math.sin(time / 90) * 8, 8); G.lineStyle(3, 0x070b10, 1); }
-        if (diving) { G.fillEllipse(x, y, 14, 32); G.fillTriangle(x - 4, y + 12, x + 4, y + 12, x, y + 36); G.fillTriangle(x - 3, y - 6, x - 14, y + 4, x - 3, y + 8); G.fillTriangle(x + 3, y - 6, x + 14, y + 4, x + 3, y + 8); }
-        else { G.fillEllipse(x, y, 34, 14); G.fillTriangle(x - 8, y - 2, x + 8, y - 2, x, y - 16 - f); G.fillTriangle(x - 8, y + 2, x + 8, y + 2, x, y + 8 + f * 0.3); G.fillTriangle(x + d * 16, y - 4, x + d * 16, y + 2, x + d * 36, y + 4); }
-        G.fillStyle(0xdfe8ee, 1); G.fillCircle(x + (diving ? 0 : d * 11), y - (diving ? 8 : 3), 1.6); G.fillStyle(0x070b10, 1);
-        if (diving && hit(x, y + 10, 34, 60)) { this.die('pelican', sec); return true; }
+        drawBird(G, x, y, d, e.st, time);
+        if (diving && hit(x, y + 12, 34, 92)) { this.die('pelican', sec); return true; }
       }
     }
     if (!SHARK_ON) { this.drawHitboxes(); return false; }

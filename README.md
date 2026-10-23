@@ -69,3 +69,8 @@ Las torres miden `WALL_H` (156 px), 36 px mas que el agua alta: el agua nunca la
 ## v10
 - Al morir se reinician todos los enemigos (cangrejo, pelicano) antes de reaparecer en el checkpoint.
 - Tiburon apagado (`SHARK_ON = false` en game.js). El codigo sigue ahi para activarlo mas adelante.
+
+## v8: enemigos y ambiente
+- Cangrejo (de frente, dos pinzas con muesca, patas articuladas) y ave carroñera (cuello pelado, pico ganchudo, alas con plumas separadas) redibujados como siluetas con ojos que brillan. Cajas de dano: cangrejo 56x22, ave en picada 26x84 (activa "Mostrar hitboxes" en Ajustes para verlas).
+- Decoración estilo Limbo (solo adorno, sin colisión): ramas secas, telarañas, cadenas colgando, arañas en hilo, huesos de pez y niebla baja. Con `?look=color` (condición de control) no se dibuja.
+- Techo izquierdo de S3 acortado a 3 casillas (igual que el derecho); el cuerpo físico al nadar cubre todo el dibujo para no traspasar torres.
