@@ -408,6 +408,34 @@ function chainLinks(g, x0, y0, len, sway, time, ph) {
   g.lineStyle(1.4, 0x3c5565, 0.9); g.beginPath(); g.moveTo(tx - 5, ty + 2); g.lineTo(tx, ty + 14); g.lineTo(tx + 5, ty + 2); g.strokePath();
 }
 
+function drawSlime(g, x, y, w, rnd) {   // limo y algas en la base de una pared; percebes (circulitos claros) en la linea de marea
+  g.fillStyle(0x2f5a3a, 0.55); g.fillRect(x, y - 5, w, 5);
+  for (let i = 0; i < w / 7; i++) { const sx = x + 3 + i * 7 + rnd() * 3, h = 6 + rnd() * 12; g.lineStyle(1.6, 0x3d7a4c, 0.6); g.lineBetween(sx, y - 3, sx + (rnd() - 0.5) * 6, y - 3 - h); }
+  g.fillStyle(0xcfd8d2, 0.5);
+  for (let i = 0; i < w / 9; i++) g.fillCircle(x + 4 + i * 9 + rnd() * 4, y - 8 - rnd() * 5, 1.4 + rnd());
+}
+function drawShell(g, x, y, k) {   // concha
+  g.fillStyle(0xb8b2a0, 0.6); g.fillEllipse(x, y - 3, 10, 7); g.lineStyle(1, 0x5f6258, 0.8);
+  for (let i = -1; i <= 1; i++) g.lineBetween(x, y, x + i * 3, y - 6);
+}
+function drawNet(g, x, y, w, h) {   // red vieja tirada en el suelo
+  g.lineStyle(1, 0x6f8591, 0.5);
+  for (let i = 0; i <= 6; i++) g.lineBetween(x + i * w / 6, y - 2, x + i * w / 6 + 6, y - h);
+  for (let j = 1; j <= 3; j++) g.lineBetween(x + j * 2, y - j * h / 3, x + w + j * 2, y - j * h / 3 + (j % 2 ? 2 : -2));
+}
+function drawArch(g, x, w, gy) {   // arco de concreto en el fondo: dos pilares y viga con borde mas claro
+  g.fillStyle(0x0a1d29, 1); g.fillRect(x, 0, 26, gy); g.fillRect(x + w - 26, 0, 26, gy); g.fillRect(x, 0, w, 34);
+  g.fillStyle(0x1c3a4a, 0.8); g.fillRect(x, 34, w, 3); g.fillRect(x + 26, 0, 2, gy); g.fillRect(x + w - 28, 0, 2, gy);
+}
+function drawStain(g, x, y, w, h) {   // mancha de humedad
+  g.fillStyle(0x040c12, 0.22); g.fillEllipse(x, y, w, h); g.fillStyle(0x040c12, 0.14); g.fillEllipse(x + 4, y + h * 0.4, w * 0.6, h * 0.9);
+}
+function drawGrate(g, x, y, w, h) {   // rejilla oxidada
+  g.fillStyle(0x03080c, 0.9); g.fillRect(x, y, w, h); g.lineStyle(2, 0x6b4a32, 0.75);
+  for (let i = 0; i <= w; i += 8) g.lineBetween(x + i, y, x + i, y + h);
+  g.lineStyle(2, 0x6b4a32, 0.6); g.strokeRect(x, y, w, h);
+}
+
 const HERO_H = 78;
 const PULL_T = 700;   // duracion (ms) de la animacion de agarrar / jalar el tapon   // alto en pantalla del personaje de pie (px)
 
@@ -422,29 +450,53 @@ class Level extends Phaser.Scene {
   addDecor() {
     this.decorOn = !document.body.classList.contains('color');
     if (!this.decorOn) return;
-    const rnd = mulberry(7), far = this.add.graphics().setDepth(0.4), webs = this.add.graphics().setDepth(0.95), floorG = this.add.graphics().setDepth(2.7);
-    // ramas secas al fondo: nacen del suelo (y algunas raices cuelgan del techo)
-    for (let i = 0; i < 9; i++) { const x = 60 + i * (LW / 9) + rnd() * 80; drawBranch(far, x, GY + 2, -Math.PI / 2 + (rnd() - 0.5) * 0.35, 80 + rnd() * 70, 5 + rnd() * 2, rnd); }
-    for (let i = 0; i < 7; i++) { const x = 130 + i * (LW / 7) + rnd() * 100; drawBranch(far, x, -4, Math.PI / 2 + (rnd() - 0.5) * 0.4, 40 + rnd() * 50, 4 + rnd(), rnd); }
-    // telaranas: esquinas del techo, esquinas de los techos solidos (por arriba, lejos de los pinchos) y las cimas de las torres
-    for (let s = 0; s < NSEC; s++) { drawWeb(webs, colx(s, 1), 0, 70 + rnd() * 20, 1, 1); drawWeb(webs, colx(s, SC) + T, 0, 60 + rnd() * 25, -1, 1); }
-    CEIL_SOLIDS.forEach(function (c) { const x0 = colx(c.s, c.a), x1 = colx(c.s, c.b) + T, y = GY - 5 * T; drawWeb(webs, x0, y, 46, -1, -1, 0.3); drawWeb(webs, x1, y, 46, 1, -1, 0.3); }, this);
-    WALLS.forEach(function (wl) { const x = colx(wl.s, wl.c); drawWeb(webs, x + T, GY - WALL_H, 30, 1, -1, 0.3); }, this);
-    drawWeb(webs, colx(1, 1) + 400, 0, 55, 1, 1, 0.2);
-    // huesos en el suelo
-    [[0, 8, 1], [1, 3, -1], [2, 2, 1], [2, 14, -1]].forEach(function (b) { drawBones(floorG, colx(b[0], b[1]) + 6, GY, b[2]); });
-    this.decorG = this.add.graphics().setDepth(0.9);   // cadenas, arana y niebla (se animan)
+    const rnd = mulberry(7), back = this.add.graphics().setDepth(0.3), far = this.add.graphics().setDepth(0.4), webs = this.add.graphics().setDepth(0.95), floorG = this.add.graphics().setDepth(2.7), slime = this.add.graphics().setDepth(2.75);
+    // drenaje pluvial: arcos de concreto cada 3 casillas de 6, manchas de humedad, rejillas y numeros de tramo pintados
+    for (let x = 0; x < LW; x += 360) drawArch(back, x + 60, 200, GY);
+    for (let i = 0; i < 16; i++) drawStain(back, 40 + i * (LW / 16) + rnd() * 90, 70 + rnd() * 240, 60 + rnd() * 70, 40 + rnd() * 50);
+    for (let s = 0; s < NSEC; s++) {
+      drawGrate(back, colx(s, 1) + 190 + (s === 1 ? 20 : 0), 52, 46, 22);
+      this.add.text(colx(s, 1) + 30, 56, 'TRAMO ' + (s + 1), { fontFamily: 'monospace', fontSize: '12px', color: '#8f7f66' }).setAlpha(0.45).setDepth(0.45);
+    }
+    // oxido: tuberias horizontales viejas en el fondo (las azules del juego siguen azules)
+    back.fillStyle(0x4a3424, 0.7);
+    [[0, 150], [1, 120], [2, 160]].forEach(function (p) { const x = colx(p[0], 1) + 300; back.fillRect(x, p[1], 260, 9); back.fillStyle(0x6b4a32, 0.8); back.fillRect(x - 3, p[1] - 2, 6, 13); back.fillRect(x + 257, p[1] - 2, 6, 13); back.fillStyle(0x4a3424, 0.7); });
+    // raices que cuelgan del techo (pocas y cortas)
+    for (let i = 0; i < 5; i++) { const x = 150 + i * (LW / 5) + rnd() * 120; drawBranch(far, x, -4, Math.PI / 2 + (rnd() - 0.5) * 0.3, 22 + rnd() * 22, 2 + rnd(), rnd); }
+    // telaranas: solo 4, en las esquinas altas del fondo y pegadas al techo
+    [[0, 1, 60], [colx(1, 1), 1, 55], [colx(1, SC) + T, -1, 55], [LW, -1, 50]].forEach(function (w) { drawWeb(webs, w[0], 0, w[2], w[1], 1, 0.2); });
+    // basura de mar: huesos de pez solo junto al pelicano (S2, columnas 14-17); conchas, algas secas y una red vieja por el resto
+    [[1, 14, 1], [1, 16, -1]].forEach(function (b) { drawBones(floorG, colx(b[0], b[1]) + 6, GY, b[2]); });
+    [[0, 2], [0, 15], [1, 1], [1, 9], [2, 3], [2, 14]].forEach(function (c) { drawShell(floorG, colx(c[0], c[1]) + 12, GY, 1); });
+    drawNet(floorG, colx(0, 12) + 4, GY, 60, 14); drawNet(floorG, colx(2, 5) + 4, GY, 52, 12);
+    // limo, algas y percebes: base de los muros (torres) y de los pozos
+    WALLS.forEach(function (wl) { drawSlime(slime, colx(wl.s, wl.c) - 6, GY, T + 12, rnd); });
+    PITS.forEach(function (p) { drawSlime(slime, colx(p.s, p.a) - 22, GY, 22, rnd); drawSlime(slime, colx(p.s, p.b) + T, GY, 22, rnd); });
+    // luz por seccion: S1 gris oscura, S2 con algo de verde, S3 con luz azul del mar, y la boca del tunel al final
+    const tints = [[0x0b0f12, 0.28, null], [0x0f2a1c, 0.16, null], [0x58b4e8, 0.07, 'add']];
+    for (let s = 0; s < NSEC; s++) {
+      const r = this.add.rectangle(ZB[s], 0, ZB[s + 1] - ZB[s], H, tints[s][0], tints[s][1]).setOrigin(0).setDepth(1.3);
+      if (tints[s][2]) r.setBlendMode(Phaser.BlendModes.ADD);
+    }
+    const mx = LW - 20;   // boca del tunel: luz de afuera
+    [[260, 0.07], [190, 0.08], [120, 0.1], [60, 0.14]].forEach(function (c) { this.add.circle(mx, GY - 60, c[0], 0xcfeeff, c[1]).setBlendMode(Phaser.BlendModes.ADD).setDepth(1.35); }, this);
+    this.decorG = this.add.graphics().setDepth(0.9);   // cadenas, aranas y vapor (se animan)
     this.fogG = this.add.graphics().setDepth(1.2);
-    this.chains = [[colx(0, 3) + 12, 90], [colx(0, 9) + 18, 120], [colx(0, 16), 70], [colx(1, 5) + 8, 110], [colx(1, 11) + 20, 80], [colx(1, 17) + 6, 130], [colx(2, 7) + 14, 100], [colx(2, 12) + 10, 75]];
-    this.spiders = [[colx(0, 6) + 20, 70], [colx(1, 14) + 12, 55], [colx(2, 4) + 25, 85]];
+    this.dripG = this.add.graphics().setDepth(1.8);
+    // cadenas viejas de mantenimiento: 4, cortas
+    this.chains = [[colx(0, 3) + 12, 45], [colx(0, 16), 36], [colx(1, 6) + 8, 54], [colx(2, 12) + 10, 40]];
+    // 2 aranas pegadas al techo
+    this.spiders = [[colx(0, 6) + 20, 24], [colx(1, 14) + 12, 20]];
+    // goteras: x, periodo (ms); caen del techo y hacen ondas al tocar el agua
+    this.drips = [[colx(0, 5) + 14, 2300], [colx(0, 13) + 5, 3100], [colx(1, 4) + 9, 2700], [colx(1, 9) + 12, 3500], [colx(2, 9) + 20, 2900], [colx(2, 11) + 8, 3300]].map(function (d, i) { return { x: d[0], per: d[1], off: i * 480, z: zoneOf(d[0]) }; });
   }
 
   updateDecor(time) {
     if (!this.decorOn) return;
     const g = this.decorG; g.clear();
-    this.chains.forEach(function (c, i) { chainLinks(g, c[0], 0, c[1], 6 + (i % 3) * 2, time, i * 1.7); }, this);
+    this.chains.forEach(function (c, i) { chainLinks(g, c[0], 0, c[1], 3 + (i % 3), time, i * 1.7); }, this);
     this.spiders.forEach(function (sp, i) {
-      const x = sp[0], y = sp[1] + Math.sin(time / 900 + i * 2) * 5;
+      const x = sp[0], y = sp[1] + Math.sin(time / 900 + i * 2) * 2;
       g.lineStyle(1, 0xb9c8d4, 0.35); g.lineBetween(x, 0, x, y);
       g.fillStyle(0x03080c, 1); g.fillCircle(x, y, 3.2); g.fillCircle(x, y + 5, 2.2);
       g.lineStyle(1.1, 0x03080c, 1);
@@ -452,10 +504,17 @@ class Level extends Phaser.Scene {
       g.fillStyle(0xdfe8ee, 0.8); g.fillCircle(x - 1, y - 0.5, 0.7); g.fillCircle(x + 1, y - 0.5, 0.7);
     });
     const f = this.fogG; f.clear();
-    for (let i = 0; i < 9; i++) {   // niebla baja que se desplaza despacio
-      const sp = (i % 2 ? 1 : -0.7) * 0.012, x = ((i * 310 + time * sp) % (LW + 600) + LW + 600) % (LW + 600) - 300;
-      f.fillStyle(0xb7d3e4, 0.035 + (i % 3) * 0.01); f.fillEllipse(x, GY - 14 - (i % 4) * 22, 520 + (i % 3) * 120, 46 + (i % 2) * 20);
+    for (let i = 0; i < 4; i++) {   // vapor de humedad muy tenue
+      const sp = (i % 2 ? 1 : -0.7) * 0.008, x = ((i * 700 + time * sp) % (LW + 600) + LW + 600) % (LW + 600) - 300;
+      f.fillStyle(0xb7d3e4, 0.012); f.fillEllipse(x, GY - 30 - (i % 2) * 40, 380, 34);
     }
+    // goteras del techo: caen hasta la superficie del agua de su zona y hacen ondas
+    const d = this.dripG; d.clear();
+    this.drips.forEach(function (dr) {
+      const ph = ((time + dr.off) % dr.per) / dr.per, sy = this.surfY(dr.z), fall = 0.45;
+      if (ph < fall) { const t = ph / fall, y = sy * t * t; d.fillStyle(0xbfe0f2, 0.7); d.fillEllipse(dr.x, y, 2.4, 5); }
+      else if (ph < fall + 0.25) { const t = (ph - fall) / 0.25; d.lineStyle(1.2, 0xdff1ff, 0.55 * (1 - t)); d.strokeEllipse(dr.x, sy + 1, 6 + t * 26, 2 + t * 5); }
+    }, this);
   }
 
   surfY(s) { const w = this.waters[s]; return GY - (LOW_H + (HIGH_H - LOW_H) * w.level); }
@@ -475,10 +534,12 @@ class Level extends Phaser.Scene {
       const c = Phaser.Display.Color.Interpolate.ColorWithColor(new Phaser.Display.Color(8, 24, 36), new Phaser.Display.Color(24, 62, 80), NB, i);
       bg.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b), 1); bg.fillRect(0, i * H / NB, LW, H / NB + 1);
     }
-    bg.fillStyle(0x0c2431, 1);
-    for (let x = 0; x < LW; x += 160) bg.fillRect(x + 20, 0, 36, GY);
-    bg.lineStyle(1, 0x2a5c72, 0.28);
-    for (let y = 40; y < GY; y += 40) bg.lineBetween(0, y, LW, y);
+    if (document.body.classList.contains('color')) {   // control: fondo original con barras y cuadricula
+      bg.fillStyle(0x0c2431, 1);
+      for (let x = 0; x < LW; x += 160) bg.fillRect(x + 20, 0, 36, GY);
+      bg.lineStyle(1, 0x2a5c72, 0.28);
+      for (let y = 40; y < GY; y += 40) bg.lineBetween(0, y, LW, y);
+    }
     for (let s = 0; s < NSEC; s++) [4, 16].forEach(function (c) {
       const lx = colx(s, c) + T / 2;
       const cone = this.add.graphics().setDepth(0.5).setBlendMode(Phaser.BlendModes.ADD);
