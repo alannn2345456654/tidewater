@@ -78,7 +78,7 @@ Las torres miden `WALL_H` (156 px), 36 px mas que el agua alta: el agua nunca la
 ## v11: drenaje pluvial costero (solo decoracion)
 - Escenario: tunel de drenaje que desemboca al mar. Arcos de concreto, manchas de humedad, rejillas oxidadas, numeros de seccion (en ingles) y tuberias viejas en el fondo.
 - Quitado: arboles y ramas de pie, telaranas sobre torres y techos solidos, niebla. Reducido: 4 telaranas en esquinas altas, 2 aranas pegadas al techo, 4 cadenas cortas, 5 raices cortas.
-- Basura de mar: conchas y redes viejas; los huesos de pez quedan solo junto al pelicano (S2, columnas 14-17).
+- Basura de mar: conchas y redes viejas; los peces muertos (esqueletos grandes y claros: craneo, columna, costillas y cola) quedan solo junto al pelicano (S2, columnas 13-17).
 - Limo, algas y percebes en la base de torres y pozos. Goteras del techo con ondas en el agua. Vapor de humedad muy tenue.
 - Luz por seccion: S1 gris oscura, S2 verdosa, S3 azul; la meta tiene luz de afuera. `?look=color` sigue mostrando el fondo original.
 
@@ -96,7 +96,29 @@ Las torres miden `WALL_H` (156 px), 36 px mas que el agua alta: el agua nunca la
 - `index.html` incluye el snippet de Speed Insights para sitios estaticos (sin npm). En Vercel: Speed Insights > Enable en el proyecto, `vercel --prod`, visita el sitio y espera ~30 s. En local el script da 404, es normal y no afecta al juego.
 
 ## v14: pelicano mas vivo
-- Vuela con aleteo en rafagas y planeo con las alas abiertas; el cuerpo sube con cada aleteo y se inclina (sube al despegar, baja al planear). Al dar la vuelta se achica y se voltea suavemente en vez de cambiar de golpe.
+- Vuela aleteando siempre (sin planeo); el cuerpo sube con cada aleteo y se inclina al despegar. Al dar la vuelta se achica y se voltea suavemente en vez de cambiar de golpe.
 - Avisa cerniendose con aleteo rapido, la cabeza baja mirando el agua y un graznido. En picada deja lineas de velocidad; al entrar al agua y al salir hay ondas, y al despegar sacude gotas.
 - Sonido: soplido por aleteo y graznido de aviso (suenan segun la cercania).
 - Jugabilidad igual: mismos tiempos, misma picada y misma caja de dano (26x84 en picada).
+
+## v8: agua con fisica (`water.js`)
+- El agua ya no tiene un nivel fijo por zona: es una altura por columna de 20 px que fluye sola de lo alto a lo bajo (aguas poco profundas). Las torres grandes la frenan; lo demas se mueve como ola.
+- Cada tapon es un desague en su propio sitio. Abierto, el agua cercana baja primero y el resto llega por la corriente (se ve la superficie inclinada y rayitas de espuma).
+- Cada tuberia vierte en su columna, pero solo mientras todos los tapones de su tramo (entre torres) estan puestos. Con alguno abierto, la tuberia cae al desague sin subir el agua.
+- El tapon de la derecha del pozo de la seccion 2 (`PLUG_START_CLOSED` en game.js) empieza ya puesto: solo hay que tapar el de la izquierda para que suba el agua y se cruce nadando, sin saltar el pozo. Para que otro tapon empiece puesto, agregalo a esa lista.
+- Flotar quieto: si el personaje esta en el agua y no se mueve (~0.35 s), deja la brazada horizontal y se queda de pie en el agua (a su tamaño normal): torso y cabeza fuera, piernas y pies sumergidos (mas transparentes y azulados), y los brazos se mueven poco, en contrafase y con el codo flexionado. Son 4 cuadros nuevos `sw14`-`sw17` (sprites.js) generados a partir del cuadro `idle0`; `TREAD_MS` controla la velocidad. En agua poco profunda el dibujo se recorta para que las piernas no atraviesen el piso. Al moverse vuelve a la brazada normal.
+- Un desague abierto no se puede tapar con agua corriendo por encima de ~22 px (`CLOSE_MAX_H`); el aviso muestra `...` hasta que baje.
+- Ajustes en `WATER` (water.js): `QIN` caudal de tuberia, `QOUT` caudal de desague, `G` velocidad de la ola, `DAMP` friccion. `PLUG_LOCK` (game.js) es la espera tras jalar.
+- Personaje, cangrejo, pelicano, gotas y aviso de pinchos de techo leen el nivel del punto donde estan, no de la zona.
+
+## v15: barra de vida
+- Barra de 2 mitades arriba (bajo el contador). El cangrejo quita media barra, empuja hacia atras y da 1.5 s de invulnerabilidad (parpadeo). Pinchos, pelicano, tiburon y caida matan al instante. La barra se llena al reaparecer y al tocar una bandera. `HP_MAX` y `HURT_MS` en game.js. Evento `hurt` en el registro.
+
+- Nado con minimo de agua: solo nada si el agua esta al 35% o mas (`SWIM_ENTER`); ya nadando, sigue hasta que baje de 25% (`SWIM_EXIT`). Con menos agua camina normal (animacion de pie/correr).
+
+## v16: control (gamepad)
+- Con control los globos de boton aparecen junto a Ajustes (Start/Menu/Options), Silencio (Select/View/Share), Jugar (A/✕), Ajustes del titulo (X/□), Cerrar (B/○) y Jugar de nuevo. Las pistas de los tapones muestran X o □ en vez de E.
+- Detecta Xbox o PlayStation por el id del control (otros se tratan como Xbox). Cambia a teclado al pulsar una tecla o el raton.
+- Start/Menu abre y cierra Ajustes, Select/View silencia, Y/△ reinicia el nivel (antes Start). Titulo: A o Start juega, X abre Ajustes.
+
+- Flotar quieto: caja de dano mas grande (`TREAD_HIT_W` 1.3x de ancho, `TREAD_HIT_DEEP` 22 px bajo la superficie, y 6 px mas arriba de la cabeza); el cuerpo fisico tambien algo mas ancho. Activa Mostrar hitboxes (H) para verla.

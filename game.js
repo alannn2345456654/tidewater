@@ -1,6 +1,6 @@
 'use strict';
 /* Tidewater - prototipo web (Phaser 3). Nivel de 3 secciones x 18 columnas.
-   Un solo mecanismo: el tapon del drenaje sube o baja el agua de su seccion. */
+   Un solo mecanismo: cada tapon abre o cierra su desague y el agua fluye con fisica (water.js). */
 
 // ---- Supabase (opcional). Deja vacio para guardar solo en localStorage. ----
 const SUPABASE_URL = '';       // ej. https://xxxx.supabase.co
@@ -14,7 +14,8 @@ const WALL_H = HIGH_H + 36;                       // las torres sobresalen 36 px
 const CLIMB_MAX = 50;                             // el saltito de trepar solo funciona si la cima esta a <= 50 px sobre la superficie
 const PW = 28, PH = 36, SPEED = 170, JUMP_V = -385;
 const SPIKE_H = 26;
-const FILL_T = 3.0, DRAIN_T = 1.6, COOLDOWN_EXTRA = 700;   // s para llenar / vaciar; ms extra de espera antes de volver a jalar
+const PLUG_LOCK = 900;                            // ms de espera tras jalar un tapon
+const CLOSE_MAX_H = 22;                           // un desague abierto solo se tapa si el agua sobre el esta a <= 22 px (no con el agua corriendo)
 const START_HIGH = [false, false, true];          // la seccion 3 empieza inundada
 
 const PITS = [{ s: 1, a: 4, b: 8 }, { s: 2, a: 9, b: 12 }];        // pozos con pinchos
@@ -23,7 +24,12 @@ const CEIL_SOLIDS = [{ s: 2, a: 4, b: 6 }, { s: 2, a: 15, b: 17 }];
 const ENEMIES = [{ t: 'crab', s: 0, a: 10, b: 14, v: 55 }, { t: 'pelican', s: 1, a: 14, b: 17, v: 75 }];   // cangrejo (suelo) y pelicano (vuela alto y se lanza al agua de vez en cuando)
 const SHARK_ON = false;   // tiburon apagado por ahora (se activa poniendo true)
 const SHARK_DEN = { s: 2, c: 7 };   // hueco del tiburon en el suelo de S3: solo sale si estas nadando cerca
+const SWIM_ENTER = 0.35, SWIM_EXIT = 0.25;   // nivel minimo del agua (0-1, 1 = agua alta) para empezar a nadar y para seguir nadando mientras baja
+const TREAD_HIT_W = 1.3, TREAD_HIT_DEEP = 22;   // flotando quieto: ancho de la caja de dano (x el cuerpo) y cuanto baja bajo la superficie (px)
+const HP_MAX = 2, HURT_MS = 1500;   // vida en mitades; ms de invulnerabilidad tras un golpe del cangrejo
 const WALLS = [{ s: 0, c: 6 }, { s: 1, c: 12 }];                    // muros de 3 tiles
+const PLUG_START_CLOSED = [{ s: 1, c: 10 }];     // tapones que empiezan ya puestos (el de la derecha del pozo de la seccion 2: no hace falta cruzar el pozo saltando)
+function plugStartsOpen(p) { return !START_HIGH[p.z] && !PLUG_START_CLOSED.some(function (q) { return q.s === p.s && q.c === p.c; }); }
 const PLUGS = [{ s: 0, c: 3 }, { s: 1, c: 2 }, { s: 1, c: 10 },
                { s: 2, c: 2 }, { s: 2, c: 8 }, { s: 2, c: 13 }];
 
@@ -223,7 +229,7 @@ function bindTouch() {
 function bindMute() {
   const el = document.getElementById('mute'); if (!el) return;
   if (!SFX.available) { el.style.display = 'none'; return; }
-  const paint = function () { el.textContent = SFX.isMuted() ? '\uD83D\uDD07' : '\uD83D\uDD0A'; el.title = SFX.isMuted() ? 'Sound off (M)' : 'Sound (M)'; };
+  const paint = function () { (el.querySelector('.ico') || el).textContent = SFX.isMuted() ? '\uD83D\uDD07' : '\uD83D\uDD0A'; el.title = SFX.isMuted() ? 'Sound off (M)' : 'Sound (M)'; };
   SFX.onToggle = paint; paint();
   el.addEventListener('click', function (e) { SFX.unlock(); SFX.toggle(); e.currentTarget.blur(); });
 }
@@ -243,6 +249,56 @@ function rumble(ms, mag) {
     }
   } catch (e) { /* sin vibracion */ }
 }
+
+// ---- Control (gamepad): tipo (Xbox / PlayStation), globos con el boton en la interfaz y atajos de menu ----
+// Botones estandar: 0 A/✕ · 1 B/○ · 2 X/□ · 3 Y/△ · 8 Select(View/Share) · 9 Start(Menu/Options)
+const PADUI = {
+  active: false, type: 'xbox', prev: [], blockUntil: 0, hooks: null, badges: [],
+  GL: { xbox: { confirm: 'A', back: 'B', pull: 'X', restart: 'Y', menu: 'MENU', view: 'VIEW' },
+        ps: { confirm: '\u2715', back: '\u25CB', pull: '\u25A1', restart: '\u25B3', menu: 'OPT', view: 'SHARE' } },
+  COL: { xbox: { confirm: '#2ea043', back: '#d1343b', pull: '#2f6fe0', restart: '#c99a10', menu: '#4b5563', view: '#4b5563' },
+         ps: { confirm: '#4f8ff7', back: '#e0505a', pull: '#d96aa0', restart: '#2fb36a', menu: '#4b5563', view: '#4b5563' } },
+  glyph: function (k) { return this.GL[this.type][k]; },
+  color: function (k) { return this.COL[this.type][k]; },
+  badge: function (el, k) {   // globo con la letra del boton, pegado debajo del elemento (solo se ve cuando se juega con control)
+    if (!el) return;
+    const b = document.createElement('span'); b.className = 'gpb'; b.dataset.k = k; el.appendChild(b); this.badges.push(b);
+  },
+  paint: function () { const me = this; this.badges.forEach(function (b) { b.textContent = me.glyph(b.dataset.k); b.style.setProperty('--c', me.color(b.dataset.k)); }); },
+  set: function (a) { if (this.active !== a) { this.active = a; document.body.classList.toggle('pad', a); } },
+  handle: function (edge) {
+    const h = this.hooks; if (!h) return;
+    if (h.onTitle()) {                                   // titulo: A o Start juega, X abre ajustes, B o Start los cierra
+      if (h.panelOpen()) { if (edge(1) || edge(9)) h.openPanel(false); return; }
+      if (edge(0) || edge(9)) { this.blockUntil = performance.now() + 300; h.play(); } else if (edge(2)) h.openPanel(true);
+      return;
+    }
+    if (edge(8) && SFX.available) { SFX.unlock(); SFX.toggle(); }                              // Select / View / Share: silenciar
+    if (h.panelOpen()) { if (edge(1) || edge(9)) { h.openPanel(false); this.blockUntil = performance.now() + 300; } return; }
+    if (edge(9) && !ENDUI.open) h.openPanel(true);                                             // Start / Menu / Options: ajustes
+  },
+  start: function () {
+    const me = this;
+    window.addEventListener('keydown', function () { me.set(false); }, true);
+    ['mousedown', 'touchstart'].forEach(function (ev) { window.addEventListener(ev, function () { me.set(false); }, { passive: true }); });
+    function tick() {
+      const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+      let gp = null;
+      for (let i = 0; i < pads.length; i++) if (pads[i] && pads[i].connected) { gp = pads[i]; break; }
+      if (gp) {
+        const type = /054c|playstation|dualshock|dualsense|wireless controller|ps4|ps5/.test((gp.id || '').toLowerCase()) ? 'ps' : 'xbox';
+        if (type !== me.type) { me.type = type; me.paint(); }
+        const cur = [];
+        for (let i = 0; i < 17; i++) cur[i] = !!(gp.buttons[i] && gp.buttons[i].pressed);
+        if (cur.some(Boolean) || Math.abs(gp.axes[0] || 0) > 0.5 || Math.abs(gp.axes[1] || 0) > 0.5) me.set(true);
+        me.handle(function (i) { return cur[i] && !me.prev[i]; });
+        me.prev = cur;
+      } else me.prev = [];
+      requestAnimationFrame(tick);
+    }
+    tick();
+  }
+};
 
 // ---- Pantalla final con la pregunta de justicia ----
 const ENDUI = { open: false, sel: 0, rated: false };
@@ -422,11 +478,29 @@ function drawBranch(g, x, y, ang, len, w, rnd) {   // rama seca: se bifurca y se
   const n = len > 40 ? 3 : 2;
   for (let i = 0; i < n; i++) drawBranch(g, x2 - Math.cos(ang) * len * 0.15 * i, y2 - Math.sin(ang) * len * 0.15 * i, ang + (rnd() - 0.5) * 1.3, len * (0.55 + rnd() * 0.2), Math.max(1, w * 0.68), rnd);
 }
-function drawBones(g, x, y, k) {   // espina de pez en el suelo
-  g.lineStyle(1.6, 0x6f8591, 0.55); g.lineBetween(x, y - 3, x + 34 * k, y - 3);
-  for (let i = 1; i < 7; i++) { const bx = x + i * 5 * k, h = 6 - Math.abs(i - 3) * 0.9; g.lineBetween(bx, y - 3, bx - 1.5 * k, y - 3 - h); g.lineBetween(bx, y - 3, bx - 1.5 * k, y - 3 + h * 0.4); }
-  g.lineBetween(x + 34 * k, y - 3, x + 42 * k, y - 8); g.lineBetween(x + 34 * k, y - 3, x + 42 * k, y + 1);   // cola
-  g.strokeEllipse(x - 5 * k, y - 4, 11, 8); g.fillStyle(0x6f8591, 0.5); g.fillCircle(x - 6 * k, y - 5, 1.2);   // craneo
+function drawBones(g, x, y, k) {   // pez muerto: esqueleto tumbado en el suelo (craneo, columna, costillas, aletas y cola)
+  const BONE = 0xd5e0e4, DARK = 0x07131b, ys = y - 10, L = 74;
+  const X = function (d) { return x + d * k; };
+  g.fillStyle(0x03080c, 0.4); g.fillEllipse(X(L / 2), y - 1, L + 6, 5);                      // sombra en el suelo
+  g.lineStyle(2.4, BONE, 0.92); g.lineBetween(X(15), ys, X(L - 10), ys);                       // columna
+  g.fillStyle(BONE, 0.95);
+  for (let i = 0; i < 12; i++) g.fillCircle(X(19 + i * 4.4), ys, 1.7);                         // vertebras
+  g.lineStyle(1.6, BONE, 0.85);
+  for (let i = 0; i < 11; i++) {                                                               // costillas: curvas, mas largas al centro
+    const bx = 18 + i * 4.4, h = 3 + 7.5 * Math.pow(Math.sin(Math.PI * (i + 0.6) / 11.4), 0.9);
+    g.lineBetween(X(bx), ys, X(bx + 2.2), ys - h * 0.75); g.lineBetween(X(bx + 2.2), ys - h * 0.75, X(bx + 5), ys - h);
+    g.lineBetween(X(bx), ys, X(bx + 2.2), ys + h * 0.75); g.lineBetween(X(bx + 2.2), ys + h * 0.75, X(bx + 5), ys + h);
+  }
+  g.lineStyle(1.2, BONE, 0.7);
+  for (let i = 0; i < 6; i++) { const bx = 24 + i * 6; g.lineBetween(X(bx), ys - 11 + Math.abs(i - 2.5) * 0.9, X(bx + 2), ys - 15 + Math.abs(i - 2.5) * 0.9); }   // espinas de la aleta dorsal
+  const tx = L - 10;                                                                            // cola bifurcada con radios
+  g.lineStyle(1.8, BONE, 0.9); g.lineBetween(X(tx), ys, X(L + 2), ys - 11); g.lineBetween(X(tx), ys, X(L + 2), ys + 11); g.lineBetween(X(L + 2), ys - 11, X(L - 4), ys);  g.lineBetween(X(L + 2), ys + 11, X(L - 4), ys);
+  g.lineStyle(1, BONE, 0.65); g.lineBetween(X(tx + 2), ys, X(L), ys - 6); g.lineBetween(X(tx + 2), ys, X(L), ys + 6); g.lineBetween(X(tx), ys, X(L + 1), ys);
+  g.fillStyle(BONE, 0.2); g.fillEllipse(X(8), ys, 20, 17);                                      // craneo
+  g.lineStyle(2, BONE, 0.95); g.strokeEllipse(X(8), ys, 20, 17);
+  g.lineBetween(X(-2), ys + 1, X(6), ys + 6); g.lineBetween(X(-2), ys - 1, X(5), ys - 5);       // mandibula y hocico (boca abierta)
+  g.lineStyle(1.4, BONE, 0.8); g.beginPath(); g.moveTo(X(14), ys - 7); g.lineTo(X(11), ys); g.lineTo(X(14), ys + 7); g.strokePath();   // opérculo
+  g.fillStyle(DARK, 1); g.fillCircle(X(5), ys - 2, 3.1); g.lineStyle(1.2, BONE, 0.9); g.strokeCircle(X(5), ys - 2, 3.4);   // cuenca del ojo
 }
 function chainLinks(g, x0, y0, len, sway, time, ph) {
   const n = Math.floor(len / 9);
@@ -497,8 +571,10 @@ class Level extends Phaser.Scene {
     for (let i = 0; i < 5; i++) { const x = 150 + i * (LW / 5) + rnd() * 120; drawBranch(far, x, -4, Math.PI / 2 + (rnd() - 0.5) * 0.3, 22 + rnd() * 22, 2 + rnd(), rnd); }
     // telaranas: solo 4, en las esquinas altas del fondo y pegadas al techo
     [[0, 1, 60], [colx(1, 1), 1, 55], [colx(1, SC) + T, -1, 55], [LW, -1, 50]].forEach(function (w) { drawWeb(webs, w[0], 0, w[2], w[1], 1, 0.2); });
-    // basura de mar: huesos de pez solo junto al pelicano (S2, columnas 14-17); conchas, algas secas y una red vieja por el resto
-    [[1, 14, 1], [1, 16, -1]].forEach(function (b) { drawBones(floorG, colx(b[0], b[1]) + 6, GY, b[2]); });
+    // basura de mar: una montanita de esqueletos de pez junto al pelicano (S2, columnas 13-17); conchas, algas secas y una red vieja por el resto
+    this.textures.get('h_bones_pile').setFilter(Phaser.Textures.FilterMode.NEAREST);   // pixel art: sin suavizar
+    floorG.fillStyle(0x03080c, 0.4); floorG.fillEllipse(colx(1, 15) + 10, GY - 1, 140, 6);
+    this.add.image(colx(1, 15) + 10, GY + 1, 'h_bones_pile').setOrigin(0.5, 1).setScale(1.4).setDepth(2.7);   // montanita de pescados
     [[0, 2], [0, 15], [1, 1], [1, 9], [2, 3], [2, 14]].forEach(function (c) { drawShell(floorG, colx(c[0], c[1]) + 12, GY, 1); });
     drawNet(floorG, colx(0, 12) + 4, GY, 60, 14); drawNet(floorG, colx(2, 5) + 4, GY, 52, 12);
     // limo, algas y percebes: base de los muros (torres) y de los pozos
@@ -543,20 +619,24 @@ class Level extends Phaser.Scene {
     // goteras del techo: caen hasta la superficie del agua de su zona y hacen ondas
     const d = this.dripG; d.clear();
     this.drips.forEach(function (dr) {
-      const ph = ((time + dr.off) % dr.per) / dr.per, sy = this.surfY(dr.z), fall = 0.45;
+      const ph = ((time + dr.off) % dr.per) / dr.per, sy = this.surfAt(dr.x), fall = 0.45;
       if (ph < fall) { const t = ph / fall, y = sy * t * t; d.fillStyle(0xbfe0f2, 0.7); d.fillEllipse(dr.x, y, 2.4, 5); }
       else if (ph < fall + 0.25) { const t = (ph - fall) / 0.25; d.lineStyle(1.2, 0xdff1ff, 0.55 * (1 - t)); d.strokeEllipse(dr.x, sy + 1, 6 + t * 26, 2 + t * 5); }
     }, this);
   }
 
-  surfY(s) { const w = this.waters[s]; return GY - (LOW_H + (HIGH_H - LOW_H) * w.level); }
+  surfAt(x) { return GY - this.W.at(x); }   // y de la superficie del agua en x (cada punto tiene su propio nivel)
+  lvlAt(x) { return this.W.level(x); }       // 0 = lamina, 1 = nivel alto
 
   create() {
     this.startTime = this.time.now;
     this.deaths = 0; this.coinCount = 0; this.gem = false;
     this.dead = false; this.done = false; this.checkpoint = 0;
+    this.hp = HP_MAX; this.hurtUntil = 0; this.knockUntil = 0; this.knockV = 0;   // barra de vida: el cangrejo quita media barra, lo demas mata
     this.coyote = 0; this.buffer = 0; this.lastPull = 0;
-    this.waters = [0, 1, 2].map(function (s) { return { high: START_HIGH[s], level: START_HIGH[s] ? 1 : 0, lock: 0, lockDur: 1 }; });
+    this.W = makeWater(LW, LOW_H, HIGH_H, WALLS.map(function (wl) { return [colx(wl.s, wl.c), colx(wl.s, wl.c) + T]; }));   // agua con fisica
+    for (let z = 0; z < NZ; z++) this.W.fill(ZB[z], ZB[z + 1], START_HIGH[z] ? 1 : 0);
+    this.zOpen = [0, 0, 0];
     this.hazards = []; this.coinObjs = []; this.plugObjs = []; this.ceilObjs = []; this.wasFloat = false; this.lastAmb = 0;
 
     this.physics.world.setBounds(0, 0, LW, H + 300);
@@ -643,11 +723,8 @@ class Level extends Phaser.Scene {
     }, this);
 
     // Agua (por seccion) y linea punteada del nivel alto junto a cada tapon
-    this.waterRects = []; this.waterLines = [];
-    for (let s = 0; s < NSEC; s++) {
-      this.waterRects.push(this.add.rectangle(ZB[s], GY - LOW_H, ZB[s + 1] - ZB[s], LOW_H + T, 0x2f80ed, 0.45).setOrigin(0).setDepth(1.5));
-      this.waterLines.push(this.add.rectangle(ZB[s], GY - LOW_H, ZB[s + 1] - ZB[s], 3, 0x9ad0ff, 0).setOrigin(0).setDepth(1.6));
-    }
+    this.waterG = this.add.graphics().setDepth(1.5);   // el agua se dibuja cada frame desde la simulacion
+    this.foamG = this.add.graphics().setDepth(1.62);
     this.dotG = this.add.graphics().setDepth(1.7);
     this.waveG = this.add.graphics().setDepth(1.65);
     this.floatingNow = false; this.floatSec = 0; this.sink = 0;
@@ -661,7 +738,7 @@ class Level extends Phaser.Scene {
       const cx = colx(p.s, p.c) + T / 2;
       const hint = this.add.text(cx, GY - 45, 'E', { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff',
         backgroundColor: '#2f80ed', padding: { x: 5, y: 2 } }).setOrigin(0.5).setDepth(6).setVisible(false);
-      this.plugObjs.push({ s: p.s, z: p.z, cx: cx, hint: hint, by: GY - 15 });
+      this.plugObjs.push({ s: p.s, z: p.z, cx: cx, c: p.c, hint: hint, by: GY - 15, open: plugStartsOpen(p), lock: 0, lockDur: 1 });
     }, this);
 
     // Tuberias azules: siempre vierten un chorro grande (se dibuja en update)
@@ -727,6 +804,7 @@ class Level extends Phaser.Scene {
     this.skin = this.add.graphics().setDepth(5);
     this.heroK = HERO_H / HERO_META.idle0.h;
     this.spr = this.add.image(0, 0, 'h_idle0').setOrigin(0.5, 1).setScale(this.heroK).setDepth(4.9);
+    this.sprW = this.add.image(0, 0, 'h_sw14w').setOrigin(0.5, 1).setScale(this.heroK).setDepth(4.95).setVisible(false);   // mitad mojada (bajo la superficie) al flotar quieto
     this.facing = 1;
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
 
@@ -745,6 +823,9 @@ class Level extends Phaser.Scene {
     this.add.circle(104, 24, 8, 0xe63946).setScrollFactor(0).setDepth(10);
     this.deathText = this.add.text(120, 14, '0', { fontFamily: 'Trebuchet MS, system-ui, sans-serif', fontSize: '20px', color: '#fff' }).setScrollFactor(0).setDepth(10);
 
+    this.hpG = this.add.graphics().setScrollFactor(0).setDepth(10);   // barra de vida (2 mitades)
+    this.drawHp();
+
     // Entrada
     const kb = this.input.keyboard;
     this.dbgG = null;
@@ -758,33 +839,48 @@ class Level extends Phaser.Scene {
   update(time, delta) {
     const dt = Math.min(delta, 50) / 1000;
 
-    // Animacion del agua
-    for (let s = 0; s < NSEC; s++) {
-      const w = this.waters[s], tgt = w.high ? 1 : 0;
-      if (w.level < tgt) w.level = Math.min(tgt, w.level + dt / FILL_T);
-      else if (w.level > tgt) w.level = Math.max(tgt, w.level - dt / DRAIN_T);
-      const sy = this.surfY(s);
-      this.waterRects[s].y = sy; this.waterRects[s].setSize(ZB[s + 1] - ZB[s], GY + T * Math.min(1, w.level * 3) - sy);   // agua baja: solo una lamina sobre el piso, sin llenar los pozos
-      this.waterLines[s].y = sy;
-    }
-    this.waveG.clear();
-    for (let s = 0; s < NSEC; s++) {
-      const sy = this.surfY(s);
+    // Agua con fisica: la tuberia solo vierte si todos los tapones de su tramo estan puestos; cada tapon abierto es un desague
+    const W = this.W, zOpen = [0, 0, 0], srcs = [], sinks = [];
+    this.plugObjs.forEach(function (p) { if (p.open) { zOpen[p.z]++; sinks.push({ x: p.cx, q: WATER.QOUT }); } });
+    for (let z = 0; z < NZ; z++) if (!zOpen[z]) srcs.push({ x: this.pipeX[z], q: WATER.QIN });
+    this.zOpen = zOpen;
+    W.step(dt, srcs, sinks);
+    const wg = this.waterG; wg.clear();
+    this.waveG.clear(); this.foamG.clear();
+    for (let i = 0; i < W.N;) {                       // un tramo continuo de agua entre torres
+      if (W.solid[i]) { i++; continue; }
+      let j = i; while (j < W.N && !W.solid[j]) j++;
+      const x0 = i * W.CW, x1 = j * W.CW;
+      wg.fillStyle(0x2f80ed, 0.45);
+      for (let x = x0; x < x1; x += 10) {
+        const xa = x, xb = Math.min(x + 10, x1), ha = W.at(Math.min(xa + 0.01, x1)), hb = W.at(Math.max(xb - 0.01, x0));
+        const la = Math.min(1, Math.max(0, (ha - LOW_H) / (HIGH_H - LOW_H))), lb = Math.min(1, Math.max(0, (hb - LOW_H) / (HIGH_H - LOW_H)));
+        wg.fillPoints([{ x: xa, y: GY - ha }, { x: xb, y: GY - hb }, { x: xb, y: GY + T * Math.min(1, lb * 3) }, { x: xa, y: GY + T * Math.min(1, la * 3) }], true);
+      }
       [[3, 0.9, 0, 0], [2, 0.35, 1.6, 7]].forEach(function (L) {
         this.waveG.lineStyle(L[0], 0x9ad0ff, L[1]); this.waveG.beginPath();
-        const zw = ZB[s + 1] - ZB[s];
-        for (let x = 0; x <= zw + 11; x += 12) {
-          const xx = ZB[s] + Math.min(x, zw);
-          const yy = sy + L[3] + Math.sin(xx * 0.03 + time / 380 + L[2]) * 2.2;
-          if (x === 0) this.waveG.moveTo(xx, yy); else this.waveG.lineTo(xx, yy);
+        for (let x = x0; x <= x1 + 11; x += 12) {
+          const xx = Math.min(x, x1), hx = W.at(Math.max(x0 + 0.01, Math.min(xx, x1 - 0.01)));
+          const amp = 2.2 * (0.35 + 0.65 * Math.min(1, (hx - LOW_H) / 30));
+          const yy = GY - hx + L[3] * Math.min(1, (hx - LOW_H) / 20) + Math.sin(xx * 0.03 + time / 380 + L[2]) * amp;
+          if (x === x0) this.waveG.moveTo(xx, yy); else this.waveG.lineTo(xx, yy);
         }
         this.waveG.strokePath();
       }, this);
+      i = j;
+    }
+    for (let i = 1; i < W.N; i++) {                   // espuma: rayitas que se mueven con la corriente
+      if (W.solid[i - 1] || W.solid[i]) continue;
+      const hh = Math.max(W.h[i - 1], W.h[i]), v = W.f[i] / Math.max(hh, 1);
+      if (Math.abs(v) < 45 || hh < LOW_H + 6) continue;
+      const sy = GY - hh, a = Math.min(0.7, Math.abs(v) / 300), off = ((time * v * 0.0012) % 24 + 24) % 24;
+      this.foamG.lineStyle(2, 0xdff1ff, a);
+      for (let k = -1; k < 1; k++) { const xx = i * W.CW + k * 24 + off - 12; this.foamG.lineBetween(xx, sy + 5, xx + Math.sign(v) * 9, sy + 5); }
     }
     this.plugG.clear();
     const plg = this.plugG;
     this.plugObjs.forEach(function (p) {
-      const plugged = this.waters[p.z].high, cx = p.cx, surf = this.surfY(p.z);
+      const plugged = !p.open, cx = p.cx, surf = this.surfAt(p.cx);
       p.kick = (p.kick || 0) * 0.88; p.deny = (p.deny || 0) * 0.9;
       p.by = surf - 4 + Math.sin(time / 500 + cx) * 1.5 + p.kick * 9;             // la boya flota en la superficie
       plg.fillStyle(0x040b10, 1); plg.fillRoundedRect(cx - 19, GY, 38, 5, 2); // desague
@@ -814,7 +910,7 @@ class Level extends Phaser.Scene {
       plg.fillStyle(0x2f80ed, 1); plg.fillRoundedRect(px - sw / 2, py - sh / 2, sw, sh * 0.72, 4);
       plg.fillStyle(0xbfe3ff, 0.5); plg.fillRect(px - sw / 2 + 5, py - sh / 2 + 2, sw * 0.45, 3);
       plg.lineStyle(2.2, 0xffd166, 1); plg.strokeCircle(px, py - sh / 2 - 3.5, 4);                   // anilla para agarrarlo
-      const bcx = cx + Math.sin(time / 25) * 4 * p.deny, wz = this.waters[p.z], rem = Math.max(0, wz.lock - time);
+      const bcx = cx + Math.sin(time / 25) * 4 * p.deny, wz = p, rem = Math.max(0, p.lock - time);
       plg.fillStyle(0x1f5fbf, 1); plg.fillCircle(bcx, p.by, 13);      // boya
       plg.fillStyle(0x2f80ed, 1); plg.fillCircle(bcx, p.by - 1, 12);
       plg.fillStyle(0xbfe3ff, 0.9); plg.fillRect(bcx - 12, p.by - 3, 24, 5);
@@ -826,7 +922,7 @@ class Level extends Phaser.Scene {
       }
       plg.lineStyle(2, 0x9ad0ff, 0.5); plg.strokeEllipse(cx, surf + 1, 34, 6);
       if (p.kick > 0.05) { plg.lineStyle(2, 0xffffff, p.kick * 0.8); plg.strokeEllipse(cx, surf + 1, 34 + (1 - p.kick) * 60, 6 + (1 - p.kick) * 14); }
-      if (!plugged) {                                                 // remolino: el agua se va por el desague
+      if (!plugged && this.W.at(cx) > LOW_H + 2) {                     // remolino: el agua se va por el desague
         for (let i = 0; i < 3; i++) {
           const r = 22 - ((time / 28 + i * 7.5) % 22);
           plg.lineStyle(2, 0xdff1ff, Math.min(0.8, r / 22)); plg.strokeEllipse(cx, surf + 2, r * 2, r * 0.45);
@@ -835,7 +931,7 @@ class Level extends Phaser.Scene {
     }, this);
     this.flowG.clear();
     for (let s = 0; s < NSEC; s++) {
-      const fx = this.pipeX[s], top = 76, bot = this.surfY(s) + 2, len = bot - top;
+      const fx = this.pipeX[s], top = 76, bot = this.surfAt(this.pipeX[s]) + 2, len = bot - top;
       const px = this.pipeL[s], L1 = 49, L2 = 76, L3 = 24, tot = L1 + L2 + L3;   // agua corriendo dentro del tubo
       this.flowG.fillStyle(0xdff1ff, 0.75);
       for (let k = 0; k < 6; k++) {
@@ -844,7 +940,7 @@ class Level extends Phaser.Scene {
         else if (u < L1 + L2) this.flowG.fillRect(px + 15 + (u - L1), 46, 8, 6);
         else this.flowG.fillRect(px + 88, 49 + (u - L1 - L2), 6, 8);
       }
-      const ww = this.waters[s], filling = ww.high && ww.level < 0.999, sw = filling ? 28 : 18;
+      const filling = !this.zOpen[s] && this.lvlAt(this.pipeX[s]) < 0.999, sw = filling ? 28 : (this.zOpen[s] ? 12 : 18);
       this.flowG.fillStyle(0x2f80ed, 0.85); this.flowG.fillRect(fx - sw / 2, top, sw, len);
       if (filling) { this.flowG.fillStyle(0xdff1ff, 0.5); this.flowG.fillCircle(fx, 78, 11 + Math.sin(time / 80) * 2); }
       this.flowG.fillStyle(0xbfe3ff, 0.55);
@@ -859,14 +955,14 @@ class Level extends Phaser.Scene {
     if (time - this.lastSplash > 70) {
       this.lastSplash = time;
       for (let s = 0; s < NSEC; s++) {
-        const ww = this.waters[s], filling = ww.high && ww.level < 0.999;
-        if (filling || Math.random() < 0.5) this.burst(this.pipeX[s] + (Math.random() - 0.5) * (filling ? 22 : 14), this.surfY(s), 0xdff1ff, filling ? 3 : 2, filling ? 60 : 46, filling ? -34 : -26);
+        const filling = !this.zOpen[s] && this.lvlAt(this.pipeX[s]) < 0.999;
+        if (filling || Math.random() < 0.5) this.burst(this.pipeX[s] + (Math.random() - 0.5) * (filling ? 22 : 14), this.surfAt(this.pipeX[s]), 0xdff1ff, filling ? 3 : 2, filling ? 60 : 46, filling ? -34 : -26);
       }
     }
     // Linea punteada: muestra a que altura llegara el agua si se tira del anillo
     this.dotG.clear(); this.dotG.lineStyle(2, 0x9ad0ff, 0.8);
     PLUGS.forEach(function (p) {
-      if (this.waters[p.z].level > 0.5) return;
+      if (this.lvlAt(colx(p.s, p.c) + T / 2) > 0.5) return;
       const x0 = colx(p.s, p.c) - T, y = GY - HIGH_H;
       for (let x = x0; x < x0 + 3 * T; x += 14) this.dotG.lineBetween(x, y, x + 7, y);
     }, this);
@@ -876,8 +972,8 @@ class Level extends Phaser.Scene {
     if (WARN) {
       const ppx = this.player.x;
       this.ceilObjs.forEach(function (o) {
-        const wz = this.waters[o.z];
-        const active = wz.high || wz.level > 0.8;                 // alta, o ya a punto de tocar los pinchos
+        const lv = Math.max(this.lvlAt(o.x + 8), this.lvlAt(o.x + o.w / 2), this.lvlAt(o.x + o.w - 8));
+        const active = (!this.zOpen[o.z] && lv > 0.02) || lv > 0.8;   // llenandose (ningun desague abierto en su tramo) o ya alta                 // alta, o ya a punto de tocar los pinchos
         if (!active) { o.warned = false; return; }
         const gap = Math.max(o.x - ppx, ppx - (o.x + o.w), 0), close = gap < 7 * T;
         const pulse = 0.5 + 0.5 * Math.sin(time / (close ? 90 : 300)), on = Math.floor(time / (close ? 150 : 420)) % 2 === 0;
@@ -913,7 +1009,8 @@ class Level extends Phaser.Scene {
       if ((b.blocked.down && time > c.t0 + 150) || time > c.t0 + 900) { if (b.blocked.down) { this.squash = 0.7; this.burst(this.player.x, this.player.y + PH / 2, 0xcdd9e3, 4, 30, -6); } this.climb = null; }
       else if (!over) dir = c.side;
     }
-    b.setVelocityX(dir * SPEED);
+    b.setVelocityX(time < this.knockUntil ? this.knockV : dir * SPEED);
+    this.inputDir = dir;   // la animacion de nado se decide por lo que presiona el jugador, no por la velocidad (contra una pared la velocidad oscila y parpadeaba entre brazada y flotar)
     if (dir) this.facing = dir;
     if (!dir && this.pullPlug && time - this.pullAt >= 0 && time - this.pullAt < PULL_T * 0.6) {   // al jalar: se acerca al objeto que va a agarrar
       const m3 = HERO_META.jump3, off = this.pullPlug.mode === 'plug' ? (m3.hand[0] - m3.ax) * this.heroK : 24;
@@ -925,15 +1022,15 @@ class Level extends Phaser.Scene {
     // Flotar: en agua alta el personaje flota en la superficie y no puede saltar ni bucear
     const sec = Phaser.Math.Clamp(Math.floor(this.player.x / (SC * T)), 0, NSEC - 1);
     const zn = zoneOf(this.player.x);
-    const w = this.waters[zn], surf = this.surfY(zn);
-    if (this.climb || w.level <= 0.02) this.swimSticky = false;                  // nada hasta tocar el piso: si el agua baja, sigue la superficie hacia abajo
-    const floating = !this.climb && w.level > 0.02 && (b.bottom >= surf - 6 || !!this.swimSticky);
+    const pLvl = this.lvlAt(this.player.x), surf = this.surfAt(this.player.x);
+    if (this.climb || pLvl < SWIM_EXIT) this.swimSticky = false;              // si el agua baja de SWIM_EXIT deja de nadar y camina
+    const floating = !this.climb && ((pLvl >= SWIM_ENTER && b.bottom >= surf - 6) || (pLvl >= SWIM_EXIT && !!this.swimSticky));   // empieza a nadar con SWIM_ENTER; con menos agua solo camina
     if (floating) this.swimSticky = true;
     if (floating && !this.wasFloat) SFX.splash();
     this.wasFloat = floating;
     b.setAllowGravity(!floating); this.floatingNow = floating; this.floatSec = zn;
     if (floating) {
-      b.setVelocityY(Phaser.Math.Clamp((surf - 3 + 10 * (1 - w.level) - b.bottom) * 8, -180, 180));
+      b.setVelocityY(Phaser.Math.Clamp((surf - 3 + 10 * (1 - pLvl) - b.bottom) * 8, -180, 180));
       this.coyote = 0;
     }
 
@@ -983,8 +1080,10 @@ class Level extends Phaser.Scene {
     for (let i = 0; i < this.plugObjs.length; i++) {
       const p = this.plugObjs[i], d = Math.abs(this.player.x - p.cx);
       p.hint.setPosition(p.cx, p.by - 84); p.hint.setVisible(d < T * 1.1);
-      const lab = time < this.waters[p.z].lock ? '...' : 'E';
-      if (p.hint.text !== lab) { p.hint.setText(lab); p.hint.setBackgroundColor(lab === 'E' ? '#2f80ed' : '#6b7280'); }
+      const wetBlock = p.open && this.W.at(p.cx) - LOW_H > CLOSE_MAX_H;   // no se puede tapar con el agua corriendo
+      const usePad = PADUI.active, key = usePad ? PADUI.glyph('pull') : 'E';   // con control muestra el boton (X / □) en vez de E
+      const lab = (time < p.lock || wetBlock) ? '...' : key, bg = lab === '...' ? '#6b7280' : (usePad ? PADUI.color('pull') : '#2f80ed');
+      if (p.hint.text !== lab || p.hint.hbg !== bg) { p.hint.setText(lab); p.hint.setBackgroundColor(bg); p.hint.hbg = bg; }
       if (d < T * 1.1) near = p;
     }
     const pull = Phaser.Input.Keyboard.JustDown(k.e) || Phaser.Input.Keyboard.JustDown(k.down) ||
@@ -992,16 +1091,16 @@ class Level extends Phaser.Scene {
     TOUCH.pull = false;
     if (pull && near && time - this.lastPull > 250) {
       this.lastPull = time;
-      const ws = this.waters[near.z];
-      if (time < ws.lock) {                                           // todavia enfriando: no pasa nada
-        near.deny = 1; rumble(40, 0.2); SFX.blocked(); log('plug_blocked', { section: near.s + 1 });
+      const wasPlugged = !near.open, wetBlock = near.open && this.W.at(near.cx) - LOW_H > CLOSE_MAX_H;
+      if (time < near.lock || wetBlock) {                             // enfriando, o con agua corriendo por el desague: no pasa nada
+        near.deny = 1; rumble(40, 0.2); SFX.blocked(); log('plug_blocked', { section: near.s + 1, wet: wetBlock });
       } else {
-        near.mode = ws.high ? 'buoy' : 'plug'; near.pt0 = time;            // agua alta: jala la boya; agua baja: agarra el tapon
-        near.sx = ws.high ? near.cx : near.cx + 27;                          // donde esta el objeto que va a agarrar
-        ws.high = !ws.high; SFX.pull(ws.high);
-        ws.lockDur = (ws.high ? FILL_T : DRAIN_T) * 1000 + COOLDOWN_EXTRA; ws.lock = time + ws.lockDur;
-        log('plug_pull', { section: near.s + 1, to: ws.high ? 'high' : 'low' });
-        this.burst(near.cx, ws.high ? near.by : GY - 8, 0x9ad0ff, 8, 34, -50);
+        near.mode = wasPlugged ? 'buoy' : 'plug'; near.pt0 = time;           // tapado: jala la boya (abre); abierto: agarra el tapon (cierra)
+        near.sx = wasPlugged ? near.cx : near.cx + 27;                       // donde esta el objeto que va a agarrar
+        near.open = wasPlugged; SFX.pull(!near.open);
+        near.lockDur = PLUG_LOCK; near.lock = time + near.lockDur;
+        log('plug_pull', { section: near.s + 1, to: near.open ? 'low' : 'high', open: near.open });
+        this.burst(near.cx, !near.open ? near.by : GY - 8, 0x9ad0ff, 8, 34, -50);
         rumble(90, 0.35); near.kick = 1; this.bounce = 0.25; this.pullAt = time; this.pullPlug = near; this.pullSwim = this.floatingNow;
         const dxp = near.sx - this.player.x; if (Math.abs(dxp) > 3) this.facing = dxp > 0 ? 1 : -1; this.cameras.main.shake(70, 0.002);
       }
@@ -1028,7 +1127,7 @@ class Level extends Phaser.Scene {
     }
 
     // Puntos de control y meta
-    for (let s = 0; s < NSEC; s++) if (this.player.x > this.flagX[s] && s > this.checkpoint) { this.checkpoint = s; SFX.flag(); }
+    for (let s = 0; s < NSEC; s++) if (this.player.x > this.flagX[s] && s > this.checkpoint) { this.checkpoint = s; SFX.flag(); if (this.hp < HP_MAX) { this.hp = HP_MAX; this.drawHp(); } }
     this.eyes.setPosition(this.player.x + this.facing * 5, this.player.y - 6);
     if (this.player.x > this.goalX) this.finish();
   }
@@ -1045,13 +1144,14 @@ class Level extends Phaser.Scene {
       P.left = ax < -0.35 || bt(14); P.right = ax > 0.35 || bt(15);   // stick izq / cruceta
       P.jump = bt(0) || bt(12);                                       // A / cruceta arriba
       cur.pull = bt(2) || bt(1) || bt(13) || ay > 0.7;                // X, B, cruceta abajo o stick abajo
-      cur.restart = bt(9); cur.ok = bt(0); cur.l = P.left; cur.r = P.right;   // Start reinicia
+      cur.restart = bt(3); cur.ok = bt(0); cur.l = P.left; cur.r = P.right;   // Y reinicia (Start abre ajustes)
       P.pull = cur.pull && !prev.pull; P.restart = cur.restart && !prev.restart; P.ok = cur.ok && !prev.ok;
       P.lEdge = cur.l && !prev.l; P.rEdge = cur.r && !prev.r;
+      if (performance.now() < PADUI.blockUntil) { P.pull = P.restart = P.ok = P.jump = false; }   // acaba de cerrar el menu / empezar: no cuenta ese boton como accion
       if (!this.padSeen) {
         this.padSeen = true;
         const kh = document.getElementById('keys');
-        if (kh) { kh.style.display = ''; kh.textContent += ' · 🎮 stick/d-pad move · A jump · X or B pull · Start restart'; }
+        if (kh) { kh.style.display = ''; kh.textContent += ' · 🎮 stick/d-pad move · A jump · X or B pull · Y restart · Start settings · Select mute'; }
       }
     }
     this.padPrev = cur;
@@ -1076,7 +1176,10 @@ class Level extends Phaser.Scene {
     }
     if (this.floatingNow) {                                      // brazada continua; mas rapida al avanzar, lenta al flotar quieto
       const dtS = Math.min(50, time - (this.swimT || time)); this.swimT = time;
-      this.swimPh = (this.swimPh || 0) + dtS / (spd > 0.05 ? 83 : 150);
+      const moving = spd > 0.05 || !!this.inputDir;
+      if (moving) this.swimMoveT = time;
+      if (time - (this.swimMoveT || 0) > 350) return 'sw' + TREAD_FRAMES[Math.floor(time / TREAD_MS) % TREAD_FRAMES.length];   // quieto en el agua: se queda erguido y solo mueve un poco los brazos
+      this.swimPh = (this.swimPh || 0) + dtS / (moving ? 83 : 150);
       return 'sw' + (Math.floor(this.swimPh) % SWIM_FRAMES);
     }
     if (!grounded) return b.velocity.y < -100 ? 'jump1' : 'jump2';
@@ -1088,21 +1191,21 @@ class Level extends Phaser.Scene {
   drawSkin(time) {
     const g = this.skin, p = this.player, b = p.body;
     g.clear();
-    this.sink += ((this.floatingNow ? 11 : 0) - this.sink) * 0.15;
+    if (this.floatingNow) this.sink += (11 - this.sink) * 0.15; else if (b.blocked.down) this.sink = 0; else this.sink *= 0.85;   // al salir del agua y pisar el piso ya no se queda hundido
     this.squash *= 0.86; this.bounce *= 0.88;
     const grounded = b.blocked.down, spd = Math.min(1, Math.abs(b.velocity.x) / SPEED);
     const bob = this.floatingNow ? Math.sin(time / 420) * 1.5 : 0;
     const feetY = p.y + PH / 2 + this.sink + bob - this.bounce * 9;
     if (this.dead) { if (!this.deadSince) this.deadSince = time; } else this.deadSince = 0;
     if (grounded) { g.fillStyle(0x000000, 0.2); g.fillEllipse(p.x, p.y + PH / 2 + 1, 38, 6); }
-    const name = this.heroFrame(time, b, grounded, spd), m = HERO_META[name], K = (/^sw/.test(name) && m.wl) ? this.heroK * SWIM_SCALE : this.heroK;
+    const name = this.heroFrame(time, b, grounded, spd), m = HERO_META[name], K = (/^sw/.test(name) && m.wl && !m.tread) ? this.heroK * SWIM_SCALE : this.heroK;
     const f = this.facing >= 0 ? 1 : -1;
     this.spr.setTexture('h_' + name).setFlipX(f < 0);
     this.spr.setOrigin(f > 0 ? m.ax / m.w : 1 - m.ax / m.w, 1).setScale(K);
-    const swimming = /^sw/.test(name), sfc = this.surfY(this.floatSec);
+    const swimming = /^sw/.test(name), sfc = this.surfAt(this.player.x);
     this.dmgInfo = { m: m, K: K, f: f, swimming: swimming, sfc: sfc };
-    const wide = swimming && !this.climb, bw = wide ? Math.max(PW, m.w * K * 0.8) : PW;   // nadando: el cuerpo cubre todo el dibujo (horizontal)
-    const bo = PW / 2 + (wide ? f * (m.w / 2 - m.ax) * K : 0) - bw / 2;
+    const wide = swimming && !this.climb, bw = wide ? Math.max(PW, (m.bw || m.w) * K * (m.tread ? TREAD_HIT_W * 0.85 : 0.8)) : PW;   // nadando: el cuerpo cubre todo el dibujo (horizontal)
+    const bo = PW / 2 + (wide ? f * ((m.bcx !== undefined ? m.bcx : m.w / 2) - m.ax) * K : 0) - bw / 2;
     if (wide) {   // si el cuerpo ensanchado cae dentro de una torre (al entrar al agua pegado a ella, o al girar), sacarlo por el lado mas cercano
       const L = p.x + bo - PW / 2, R = L + bw;
       WALLS.forEach(function (wl) {
@@ -1111,7 +1214,17 @@ class Level extends Phaser.Scene {
       });
     }
     if (Math.abs(b.width - bw) > 0.5 || Math.abs(b.offset.x - bo) > 0.5) { b.setSize(bw, PH, false); b.setOffset(bo, 0); }
-    this.spr.setPosition(p.x, swimming ? sfc + (m.wl ? (m.h - m.wl) * K + bob * 0.4 : 9 + bob) : feetY).setTint(this.dead ? 0xffb0b0 : 0xffffff);
+    let sy = swimming ? sfc + (m.wl ? (m.h - m.wl) * K + bob * 0.4 : 9 + bob) : feetY;
+    if (m.tread) sy = Math.min(sy, GY);   // poca agua: los pies se quedan sobre el piso (antes se recortaba el dibujo y parecia hundirse)
+    const blink = !this.dead && time < this.hurtUntil && Math.floor(time / 90) % 2 === 0 ? 0.35 : 1;   // parpadea mientras es invulnerable
+    this.spr.setAlpha(blink); this.sprW.setAlpha(blink);
+    this.spr.setPosition(p.x, sy).setTint(this.dead ? 0xffb0b0 : 0xffffff);
+    if (m.tread) {   // flotando quieto: dibujo seco sobre la superficie del agua y dibujo mojado (tinte de agua) debajo; el corte sigue la ola real
+      const row = Math.max(0, Math.min(m.h, m.h - (sy - sfc) / K)), W = this.sprW;
+      this.spr.setVisible(row > 0.5); if (row > 0.5) this.spr.setCrop(0, 0, m.w, row);
+      W.setVisible(row < m.h - 0.5);
+      if (row < m.h - 0.5) W.setTexture('h_' + name + 'w').setFlipX(f < 0).setOrigin(this.spr.originX, 1).setScale(K).setPosition(p.x, sy).setTint(this.dead ? 0xffb0b0 : 0xffffff).setCrop(0, row, m.w, m.h - row);
+    } else { this.spr.setVisible(true); if (this.spr.isCropped) this.spr.setCrop(); this.sprW.setVisible(false); }
     this.handPos = null;
     if (m.hand && this.pullPlug && !this.dead && pu0(this, time) >= 0 && pu0(this, time) < 1) {
       const baseY = swimming && m.wl ? sfc + (m.h - m.wl) * K + bob * 0.4 : feetY;
@@ -1131,7 +1244,7 @@ class Level extends Phaser.Scene {
       }
     }
     if (this.floatingNow) {
-      const sf = this.surfY(this.floatSec), hw = swimming ? (m.wl ? m.w * K / 2 : 50) : 24, bot = swimming ? (m.wl ? sf + (m.h - m.wl) * K + bob * 0.4 : sf + 10 + bob) : feetY;
+      const sf = this.surfAt(this.player.x), hw = swimming ? (m.wl ? m.w * K / 2 : 50) : 24, bot = swimming ? (m.wl ? sf + (m.h - m.wl) * K + bob * 0.4 : sf + 10 + bob) : feetY;
       if (bot > sf + 2 && !(swimming && m.wl)) { g.fillStyle(0x2f80ed, 0.5); g.fillRoundedRect(p.x - hw, sf, hw * 2, bot - sf + 1, { tl: 0, tr: 0, bl: 8, br: 8 }); }
       g.lineStyle(2, 0x9ad0ff, 0.7); g.strokeEllipse(p.x, sf + 1, hw * 2 + 14 + Math.sin(time / 200) * 5, 8);
     }
@@ -1150,7 +1263,7 @@ class Level extends Phaser.Scene {
   }
 
   updateCrab(e, dt, time, G) {   // el cangrejo camina de lado a rafagas, reacciona al jugador y se comporta distinto cuando el agua sube
-    const R = Math.random, clamp = Phaser.Math.Clamp, px = this.player.x, dx = px - e.x, sy = this.surfY(zoneOf(e.x));
+    const R = Math.random, clamp = Phaser.Math.Clamp, px = this.player.x, dx = px - e.x, sy = this.surfAt(e.x);
     const wet = clamp((GY - sy - 6) / 26, 0, 1), prevWet = e.wet; e.wet = wet;           // 0 = seco, 1 = totalmente sumergido
     const near = Math.abs(dx) < 230, prox = Math.max(0, 1 - Math.abs(dx) / 700) * (1 - 0.5 * wet);   // prox: volumen segun cercania (apagado bajo el agua)
     // el agua le llega: se sobresalta; el agua se va: se sacude
@@ -1216,7 +1329,7 @@ class Level extends Phaser.Scene {
   birdVis(e, dt, time, yS, prox) {   // capa visual del pelicano: aleteo en rafagas y planeo, giro suave, cabeza que baja a mirar, gotas y ondas al salir del agua
     const R = Math.random, k = function (r) { return Math.min(1, dt * r); };
     e.fd += (e.dir - e.fd) * k(6);                                           // al dar la vuelta se achica y se voltea (no cambia de golpe)
-    if (e.st === 'fly') { e.ft -= dt; if (e.ft <= 0) { e.fmode = e.fmode === 'flap' ? 'glide' : 'flap'; e.ft = e.fmode === 'flap' ? 1 + R() * 0.9 : 0.9 + R() * 1.2; } } else e.fmode = 'flap';
+    e.fmode = 'flap';   // aletea siempre (el planeo intermitente se quito)
     const rate = e.st === 'warn' ? 20 : (e.st === 'rise' ? 13 : 8.5);        // rad/s
     if (e.fmode === 'flap') e.fp += rate * dt;
     const tgt = e.fmode === 'glide' ? 0.55 + 0.1 * Math.sin(time / 700) : Math.sin(e.fp);
@@ -1246,21 +1359,28 @@ class Level extends Phaser.Scene {
     const hits = this.hitRects;
     const hit = function (cx, cy, w, h) { const r = new Phaser.Geom.Rectangle(cx - w / 2 + 4, cy - h / 2 + 4, w - 8, h - 8); hits.push(r); return Phaser.Geom.Intersects.RectangleToRectangle(pb, r); };
     const patrol = function (e) { e.x += e.dir * e.v * dt; if (e.x > e.x1 - 20) { e.x = e.x1 - 20; e.dir = -1; } else if (e.x < e.x0 + 20) { e.x = e.x0 + 20; e.dir = 1; } };
+    // pelicano: patrulla irregular (cambia de sentido y de velocidad al azar, sin quedarse nunca quieta) para que no repita siempre los mismos puntos
+    const patrolR = function (e) {
+      e.turnT = (e.turnT === undefined ? 0 : e.turnT) - dt;
+      if (e.turnT <= 0) { e.turnT = 1.5 + Math.random() * 2.5; if (Math.random() < 0.5) e.dir *= -1; e.vm = 0.6 + Math.random() * 0.9; }   // nunca se queda quieta: siempre avanza (el aleteo y su sonido siguen al movimiento)
+      e.x += e.dir * e.v * (e.vm === undefined ? 1 : e.vm) * dt;
+      if (e.x > e.x1 - 20) { e.x = e.x1 - 20; e.dir = -1; } else if (e.x < e.x0 + 20) { e.x = e.x0 + 20; e.dir = 1; }
+    };
     const S = this.shark, den = S.dx;
     if (SHARK_ON) { G.fillStyle(0x02050a, 1); G.fillEllipse(den, GY + 3, 60, 17); }           // hueco del tiburon
     G.fillStyle(0x070b10, 1); G.lineStyle(3, 0x070b10, 1);
     for (let i = 0; i < this.en.length; i++) {
-      const e = this.en[i], z = zoneOf(e.x), hi = this.waters[z].level;
+      const e = this.en[i], z = zoneOf(e.x), hi = this.lvlAt(e.x);
       if (e.t === 'crab') {
         this.updateCrab(e, dt, time, G);
-        if (hit(e.x, GY - 15 - e.lift, 64, 30)) { this.die('crab', sec); return true; }   // la caja de dano sigue al cuerpo (si salta nadando, sube con el)
+        if (hit(e.x, GY - 15 - e.lift, 64, 30) && this.hurt('crab', sec, time, e.x)) return true;   // la caja de dano sigue al cuerpo (si salta nadando, sube con el)
       } else {   // pelicano: vuela alto; si el agua esta alta avisa, se lanza en picada, se queda un instante y sube
-        const yFly = GY - HIGH_H - 90, yS = this.surfY(z) + 4; e.tm -= dt;
-        if (e.st === 'fly') { patrol(e); e.y = yFly + Math.sin(time / 300 + e.x0) * 5; if (e.tm <= 0) { if (hi > 0.85) { e.st = 'warn'; e.tm = 0.7; } else e.tm = 2; } }
+        const yFly = GY - HIGH_H - 90, yS = this.surfAt(e.x) + 4; e.tm -= dt;
+        if (e.st === 'fly') { patrolR(e); e.y = yFly + Math.sin(time / 300 + e.x0) * 5; if (e.tm <= 0) { if (hi > 0.85 && Math.random() < 0.7 && Math.abs(e.x - (e.lastDive === undefined ? -1e9 : e.lastDive)) > 45) { e.st = 'warn'; e.tm = 0.7 + Math.random() * 0.3; e.lastDive = e.x; } else e.tm = 0.4 + Math.random() * 1.4; } }
         else if (e.st === 'warn') { e.y = yFly + Math.sin(time / 60) * 3; if (e.tm <= 0) { e.st = 'dive'; e.tm = 0.3; } }
         else if (e.st === 'dive') { const p = 1 - Math.max(0, e.tm) / 0.3; e.y = yFly + (yS - yFly) * p * p; if (e.tm <= 0) { e.st = 'stay'; e.tm = 0.35; SFX.splash(); this.burst(e.x, yS, 0x9ad0ff, 8, 60, -60); } }
         else if (e.st === 'stay') { e.y = yS; if (e.tm <= 0) { e.st = 'rise'; e.tm = 0.7; } }
-        else { patrol(e); e.y = yFly + (yS - yFly) * (Math.max(0, e.tm) / 0.7); if (e.tm <= 0) { e.st = 'fly'; e.tm = 3 + Math.random() * 3; } }
+        else { patrolR(e); e.y = yFly + (yS - yFly) * (Math.max(0, e.tm) / 0.7); if (e.tm <= 0) { e.st = 'fly'; e.tm = 2 + Math.random() * 2.5; } }
         const x = e.x, y = e.y, d = e.dir, diving = e.st === 'dive' || e.st === 'stay';
         if (e.st === 'warn') { G.lineStyle(2, 0xcfe8ff, 0.5); G.strokeEllipse(x, yS, 44 + Math.sin(time / 90) * 8, 8); G.lineStyle(3, 0x070b10, 1); }
         const bv = this.birdVis(e, dt, time, yS, Math.max(0, 1 - Math.abs(this.player.x - e.x) / 700));
@@ -1273,7 +1393,7 @@ class Level extends Phaser.Scene {
     }
     if (!SHARK_ON) { this.drawHitboxes(); return false; }
     // tiburon: vive en su hueco. Si estas nadando cerca, sale, te acecha por debajo, salta a morder y vuelve al hueco
-    const hi2 = this.waters[2].level, swimNear = this.floatingNow && this.floatSec === 2 && Math.abs(this.player.x - den) < 520, sf = this.surfY(2), depth = sf + 46;
+    const hi2 = this.lvlAt(den), swimNear = this.floatingNow && this.floatSec === 2 && Math.abs(this.player.x - den) < 520, sf = this.surfAt(den), depth = sf + 46;
     if (hi2 < 0.85 && S.st !== 'hide') { S.st = 'hide'; S.cd = 3; }
     S.tm -= dt;
     if (S.st === 'hide') { if (hi2 > 0.85 && swimNear) S.cd -= dt; if (S.cd <= 0) { S.st = 'stalk'; S.x = den; S.y = GY - 4; S.tm = 2.2; SFX.stroke(); } }
@@ -1314,8 +1434,8 @@ class Level extends Phaser.Scene {
     if (!d) return new Phaser.Geom.Rectangle(b.x + 3, b.y + 3, b.width - 6, b.height - 6);
     const m = d.m, K = d.K;
     if (d.swimming) {
-      const w = m.w * K * 0.8, cx = p.x + d.f * (m.w / 2 - m.ax) * K, top = d.sfc - (m.wl || m.h / 2) * K;
-      return new Phaser.Geom.Rectangle(cx - w / 2, top, w, d.sfc + 6 - top);
+      const tr = !!m.tread, w = (m.bw || m.w) * K * (tr ? TREAD_HIT_W : 0.8), cx = p.x + d.f * ((m.bcx !== undefined ? m.bcx : m.w / 2) - m.ax) * K, top = d.sfc - (m.wl || m.h / 2) * K - (tr ? 6 : 0);
+      return new Phaser.Geom.Rectangle(cx - w / 2, top, w, d.sfc + (tr ? TREAD_HIT_DEEP : 6) - top);   // flotando quieto: caja mas grande (mas ancha, con la cabeza y las piernas sumergidas)
     }
     const w = Math.max(18, Math.min(30, m.w * K * 0.6)), h = m.h * K * 0.88;
     return new Phaser.Geom.Rectangle(p.x - w / 2, b.bottom - h, w, h);
@@ -1332,9 +1452,33 @@ class Level extends Phaser.Scene {
     const db = this.damageBox(); D.lineStyle(1.5, 0xffe14a, 1); D.strokeRect(db.x, db.y, db.width, db.height);
   }
 
+  drawHp() {
+    const g = this.hpG; g.clear();
+    g.fillStyle(0x06121a, 0.6); g.fillRoundedRect(10, 44, 168, 16, 8);
+    for (let i = 0; i < HP_MAX; i++) {
+      g.fillStyle(i < this.hp ? 0xe63946 : 0x3a1c22, 1); g.fillRoundedRect(15 + i * 81, 48, 77, 8, 4);
+      if (i < this.hp) { g.fillStyle(0xff8a93, 0.5); g.fillRect(19 + i * 81, 49, 69, 2); }
+    }
+  }
+
+  // golpe no letal (cangrejo): quita media barra, da un instante de invulnerabilidad y empuja hacia atras. Devuelve true si murio.
+  hurt(cause, sec, time, fromX) {
+    if (time < this.hurtUntil) return false;
+    this.hp--; this.drawHp();
+    if (this.hp <= 0) { this.die(cause, sec); return true; }
+    this.hurtUntil = time + HURT_MS;
+    const away = this.player.x >= fromX ? 1 : -1;
+    this.knockUntil = time + 220; this.knockV = away * 260;
+    this.player.body.setVelocityY(-230);
+    this.cameras.main.shake(120, 0.004); rumble(120, 0.4); SFX.die();
+    this.burst(this.player.x, this.player.y, 0xe63946, 6, 40, -14);
+    log('hurt', { cause: cause, section: sec + 1, hp: this.hp });
+    return false;
+  }
+
   die(cause, sec) {
     if (this.dead || this.done) return;
-    this.dead = true; this.deaths++;
+    this.dead = true; this.deaths++; this.hp = 0; this.drawHp();
     this.deathText.setText(String(this.deaths));
     SFX.die(); document.body.classList.add('dead');
     log('death', { cause: cause, section: sec + 1, x: Math.round(this.player.x), n: this.deaths });
@@ -1350,11 +1494,15 @@ class Level extends Phaser.Scene {
     this.resetEnemies();
     // Vuelve a la ultima bandera; el agua de esa seccion y las siguientes vuelve a su estado inicial
     for (let z = 0; z < NZ; z++) {
-      if (ZB[z + 1] > this.flagX[this.checkpoint]) { this.waters[z].high = START_HIGH[z]; this.waters[z].level = START_HIGH[z] ? 1 : 0; this.waters[z].lock = 0; }
+      if (ZB[z + 1] > this.flagX[this.checkpoint]) {
+        this.W.fill(ZB[z], ZB[z + 1], START_HIGH[z] ? 1 : 0); this.W.f.fill(0);
+        this.plugObjs.forEach(function (p) { if (p.z === z) { p.open = plugStartsOpen(p); p.lock = 0; } });
+      }
     }
     this.player.setFillStyle(0xe9ecef); this.eyes.setVisible(true);
     this.player.body.reset(this.flagX[this.checkpoint] + 40 - PW / 2, GY - PH - 2);
     this.dead = false; this.swimSticky = false;
+    this.hp = HP_MAX; this.hurtUntil = 0; this.knockUntil = 0; this.drawHp();
   }
 
   finish() {
@@ -1397,6 +1545,10 @@ function bindMenu() {
   $('title-cfg').addEventListener('click', function () { openPanel(true); });
   function play() { if (title.style.display === 'none') return; title.style.display = 'none'; SFX.unlock(); SFX.ui(); startGame(); }
   $('play').addEventListener('click', play);
+  PADUI.hooks = { play: play, openPanel: openPanel, panelOpen: function () { return panel.style.display === 'flex'; }, onTitle: function () { return title.style.display !== 'none'; } };
+  PADUI.badge($('cfg'), 'menu'); PADUI.badge($('mute'), 'view'); PADUI.badge($('play'), 'confirm'); PADUI.badge($('title-cfg'), 'pull');
+  PADUI.badge($('panel-close'), 'back'); PADUI.badge($('again'), 'confirm');
+  PADUI.paint(); PADUI.start();
   window.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && title.style.display === 'none') { openPanel(panel.style.display !== 'flex'); return; }
     if (title.style.display !== 'none' && panel.style.display !== 'flex' && e.key !== 'Escape') play();
