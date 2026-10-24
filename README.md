@@ -92,5 +92,8 @@ Las torres miden `WALL_H` (156 px), 36 px mas que el agua alta: el agua nunca la
 - Se dibuja detras del agua, asi que lo que queda bajo la superficie se ve sumergido.
 - Jugabilidad: misma caja de dano (56x22) y misma velocidad media; la caja sube con el cuerpo si salta nadando.
 
-## Vercel Speed Insights
-- `index.html` incluye el snippet de Speed Insights para sitios estaticos (sin npm). En Vercel: Speed Insights > Enable en el proyecto, `vercel --prod`, visita el sitio y espera ~30 s. En local el script da 404, es normal y no afecta al juego.
+## Vercel Speed Insights y Web Analytics
+- `index.html` incluye los snippets de Speed Insights y Web Analytics para sitios estaticos (sin npm).
+- **Speed Insights**: En Vercel: Speed Insights > Enable en el proyecto, `vercel --prod`, visita el sitio y espera ~30 s.
+- **Web Analytics**: En Vercel: Analytics > Enable en el proyecto, `vercel --prod`. Los datos aparecen en el dashboard de Analytics.
+- En local los scripts dan 404, es normal y no afecta al juego.
