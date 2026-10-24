@@ -84,3 +84,10 @@ Las torres miden `WALL_H` (156 px), 36 px mas que el agua alta: el agua nunca la
 
 ## v12
 - Salto un poco mas alto: `JUMP_V` de -353 a -385 (altura ~52 px -> ~62 px). El cangrejo conserva su tamano y su caja de dano; el margen para saltarlo sube de ~16 px a ~32 px. Se dejo en 62 px (no mas) para que el salto bajo los pinchos de techo de S3 siga libre con el agua baja.
+
+## v13: cangrejo mas vivo
+- Camina de lado a rafagas (arranca y frena con inercia, se detiene a acicalarse, saludar con la pinza o mirar). Ciclo de patas ligado a la distancia (los pies no patinan), cuerpo que se mece, ojos que siguen al jugador.
+- Si te acercas (~230 px) levanta las pinzas y chasquea (con sonido). Al llegar al limite de su ruta duda y da la vuelta.
+- Agua: al llegarle se sobresalta (salto, pinzas arriba, burbujas y arena). Sumergido esta mas activo, flota con las pinzas en alto, suelta burbujas que revientan en la superficie y de vez en cuando nada un saltito. Al irse el agua se sacude.
+- Se dibuja detras del agua, asi que lo que queda bajo la superficie se ve sumergido.
+- Jugabilidad: misma caja de dano (56x22) y misma velocidad media; la caja sube con el cuerpo si salta nadando.

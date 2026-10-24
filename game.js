@@ -168,6 +168,8 @@ const SFX = (function () {
     warn: function () { if (can('warn', 900)) { tone(880, 0.07, 'square', 0.05); tone(880, 0.07, 'square', 0.05, 0.13); } },
     die: function () { tone(440, 0.5, 'sawtooth', 0.12, 0, 70); noise(0.35, 0.22, 1400, 150, 0, 0.7); },
     win: function () { [523, 659, 784, 1047, 1319].forEach(function (f, i) { tone(f, i === 4 ? 0.5 : 0.18, 'triangle', 0.12, i * 0.11); }); },
+    clack: function (v) { if (can('clack', 130)) { noise(0.045, 0.16 * v, 3400, 1500, 0, 3); tone(2100, 0.035, 'square', 0.03 * v, 0, 900); } },   // pinza que chasquea
+    skitter: function (v) { if (can('skitter', 170)) noise(0.035, 0.07 * v, 2600, 4200, 0, 2.5); },                                        // patitas en el suelo
     ui: function () { tone(700, 0.05, 'square', 0.05); }
   };
   if (enabled) ['pointerdown', 'keydown', 'touchstart'].forEach(function (ev) { window.addEventListener(ev, api.unlock, { passive: true }); });
@@ -296,34 +298,55 @@ function rimEllipse(G, cx, cy, rx, ry, a0, a1, w, alpha) {   // arco del borde s
 }
 function eyeGlow(G, x, y, r) { G.fillStyle(EYE, 0.14); G.fillCircle(x, y, r * 2.8); G.fillStyle(EYE, 1); G.fillCircle(x, y, r); G.fillStyle(INK, 1); }
 
-function drawCrab(G, x, gy, time) {   // cangrejo visto de frente: caparazon bajo, dos pinzas grandes, tres patas articuladas por lado
-  const cy = gy - 13, op = Math.sin(time / 230) * 1.6;
+// Cangrejo visto de frente: camina de lado (como los de verdad). c = estado del cangrejo (ver crabInit / updateCrab).
+function drawCrab(G, c, gy, time) {
+  const x = c.x, wet = c.wet, sp = c.sp, d = c.dir, TAU = Math.PI * 2;
+  const bob = Math.sin(c.ph * 2) * 0.9 * sp + Math.sin(time / 420) * 0.35 * wet;           // el cuerpo sube y baja con cada paso; en el agua se mece
+  const cy = gy - 13 - c.lift - bob, A = 4.6 * Math.min(1, sp * 1.2);                     // A = largo del paso
+  const shake = c.shake > 0 ? Math.sin(time / 22) * 1.6 * c.shake : 0, bx = x + shake;      // sacudida al quedarse sin agua
   G.fillStyle(INK, 1);
   for (let s = -1; s <= 1; s += 2) {
+    const side = s < 0 ? 0 : 1;
     for (let i = 0; i < 3; i++) {
-      const lf = Math.sin(time / 85 + i * 2.1 + (s > 0 ? Math.PI : 0)), lift = Math.max(0, lf) * 3.2;
-      const sx = x + s * (9 + i * 2.5), sy = cy + 3 + i * 0.8;                    // sale del vientre
-      const kx = x + s * (19 + i * 5), ky = cy - 9 - (2 - i) * 2.2 - lift;           // rodilla alta (articulacion marcada)
-      const fx = x + s * (26 + i * 6), fy = gy - 1 - lift * 0.6;                   // pie en el suelo
+      const phi = c.ph + i * 2.1 + (s > 0 ? Math.PI : 0), sw = Math.sin(phi);
+      const idle = (1 - Math.min(1, sp * 2)) * Math.sin(time / 650 + i * 1.7 + side * 2.2) * 0.9;   // parado: las patas tiemblan un poco
+      const lift = Math.max(0, sw) * (2.6 + wet * 3.4) * (0.3 + 0.7 * Math.min(1, sp * 1.5)) + Math.max(0, idle);
+      const spread = 1 + 0.12 * wet + (c.hop > 0 ? 0.18 : 0);
+      const sx = bx + s * (9 + i * 2.5), sy = cy + 3 + i * 0.8;                                        // sale del vientre
+      const kx = bx + s * (19 + i * 5) * spread, ky = cy - 9 - (2 - i) * 2.2 - lift - wet * 1.8;      // rodilla alta
+      const fx = bx + s * (26 + i * 6) * spread - d * Math.cos(phi) * A, fy = gy - 1 - lift * 0.7 - c.lift * 0.55;   // pie: en el suelo se arrastra hacia atras, en el aire vuelve hacia adelante
       G.lineStyle(3.2 - i * 0.3, INK, 1); G.lineBetween(sx, sy, kx, ky); G.lineBetween(kx, ky, fx, fy);
       G.fillCircle(kx, ky, 1.9);
     }
-    // brazo y pinza grande: forma de boca abierta (dos cuernos) mirando hacia adentro y arriba
-    const ex = x + s * 19, ey = cy - 4, px = x + s * 24, py = cy - 12;
-    G.lineStyle(4.6, INK, 1); G.lineBetween(x + s * 12, cy + 1, ex, ey); G.lineBetween(ex, ey, px, py + 3);
+    // brazo y pinza: r = que tan arriba esta, gr = que tanto se lleva a la boca, op = que tan abierta
+    const r = c.cl[side], gr = c.gr[side], op = c.op[side], sway = Math.sin(time / 520 + side * 2.4) * wet * 1.6;
+    let ex = bx + s * (19 + r * 2), ey = cy - 4 - r * 7, px = bx + s * (24 + r * 3), py = cy - 12 - r * 12 + sway;
+    ex += (bx + s * 11 - ex) * gr; ey += (cy - 5 - ey) * gr; px += (bx + s * 5 - px) * gr; py += (cy - 5 - py) * gr;
+    G.lineStyle(4.6, INK, 1); G.lineBetween(bx + s * 12, cy + 1, ex, ey); G.lineBetween(ex, ey, px, py + 3);
     G.fillCircle(ex, ey, 3);
-    const mc = (s > 0 ? 235 : 305) * Math.PI / 180, gap = (24 + op * 4) * Math.PI / 180, a0 = mc + gap, a1 = mc - gap + 2 * Math.PI, pts = [{ x: px, y: py }];
-    for (let i = 0; i <= 22; i++) { const t = i / 22, th = a0 + (a1 - a0) * t, r = 8.5 + 7 * (Math.pow(1 - t, 7) + Math.pow(t, 7)); pts.push({ x: px + Math.cos(th) * r, y: py + Math.sin(th) * r }); }
+    const mc = ((s > 0 ? 235 : 305) - s * r * 28 + s * gr * 50) * Math.PI / 180, gap = (22 + op * 30) * Math.PI / 180, a0 = mc + gap, a1 = mc - gap + TAU, pts = [{ x: px, y: py }];
+    for (let i = 0; i <= 22; i++) { const t = i / 22, th = a0 + (a1 - a0) * t, rr = 8.5 + 7 * (Math.pow(1 - t, 7) + Math.pow(t, 7)); pts.push({ x: px + Math.cos(th) * rr, y: py + Math.sin(th) * rr }); }
     G.fillStyle(INK, 1); G.fillPoints(pts, true);
     G.lineStyle(1.2, RIM, 0.85); G.beginPath();
     for (let i = 3; i <= 14; i++) { const q = pts[i + 1]; if (i === 3) G.moveTo(q.x, q.y); else G.lineTo(q.x, q.y); } G.strokePath();
   }
-  G.fillStyle(INK, 1); G.fillEllipse(x, cy, 38, 18); G.fillEllipse(x, cy - 3, 30, 14);   // caparazon
-  rimEllipse(G, x, cy - 1, 18, 9, Math.PI + 0.25, 2 * Math.PI - 0.25, 1.4, 0.8);
-  G.lineStyle(1, RIM, 0.55); G.lineBetween(x - 6, cy - 8, x - 3, cy + 1); G.lineBetween(x + 6, cy - 8, x + 3, cy + 1);   // surcos del caparazon
-  G.lineStyle(2, INK, 1);
-  for (let s = -1; s <= 1; s += 2) { G.lineBetween(x + s * 4, cy - 6, x + s * 5, cy - 12); eyeGlow(G, x + s * 5, cy - 13, 1.7); }   // ojos en tallos
+  const lean = d * 1.6 * sp;                                                                    // al caminar el caparazon se adelanta un poco
+  G.fillStyle(INK, 1); G.fillEllipse(bx, cy, 38, 18); G.fillEllipse(bx + lean, cy - 3, 30, 14);   // caparazon
+  rimEllipse(G, bx + lean * 0.5, cy - 1, 18, 9, Math.PI + 0.25, 2 * Math.PI - 0.25, 1.4, 0.8);
+  G.lineStyle(1, RIM, 0.55); G.lineBetween(bx - 6, cy - 8, bx - 3, cy + 1); G.lineBetween(bx + 6, cy - 8, bx + 3, cy + 1);   // surcos
+  const mf = Math.sin(time / 90) * 0.6; G.lineStyle(1.2, RIM, 0.5); G.lineBetween(bx - 2.5, cy + 3, bx - 1.6 + mf, cy + 6); G.lineBetween(bx + 2.5, cy + 3, bx + 1.6 - mf, cy + 6);   // piezas de la boca
+  for (let s = -1; s <= 1; s += 2) {   // ojos en tallos: suben al alertarse y miran hacia el jugador
+    const up = 5 + 7 * c.eyeUp, tx = bx + s * 5 + c.look * 2.4 + s * c.eyeUp * 1.2, ty = cy - 6 - up;
+    G.lineStyle(2, INK, 1); G.lineBetween(bx + s * 4, cy - 6, tx, ty); eyeGlow(G, tx, ty - 0.6, 1.7);
+  }
   G.lineStyle(3, INK, 1);
+}
+
+// Estado del cangrejo. Modos: walk (camina de lado a rafagas), pause (se detiene: acicala, saluda con la pinza o mira), threat (pinzas arriba y chasqueando
+// cuando te acercas), turn (llega al limite, duda y da la vuelta), startle (el agua le llega: se sobresalta y levanta las pinzas).
+function crabInit(e) {
+  Object.assign(e, { mode: 'pause', mt: 0.6, ph: 0, sp: 0, wet: 0, lift: 0, look: 0, eyeUp: 0.5, cl: [0, 0], gr: [0, 0], op: [0, 0], shake: 0,
+    bubbles: [], pops: [], puffs: [], bt: 1.2, hop: 0, hopT: 3 + Math.random() * 3, idle: 'none', idleSide: 1, stepT: 0, clackLast: 0 });
 }
 
 const BIRD_K = 1.3;   // escala del dibujo del ave (la caja de dano se calcula con la misma escala)
@@ -675,7 +698,8 @@ class Level extends Phaser.Scene {
     flag(this, this.goalX, 0xffd60a);
 
     // Jugador
-    this.en = ENEMIES.map(function (e) { const x0 = colx(e.s, e.a), x1 = colx(e.s, e.b) + T; return { t: e.t, v: e.v, x0: x0, x1: x1, x: x0 + 20, dir: 1, st: 'fly', tm: 2 + Math.random() * 2, y: 0 }; });
+    this.en = ENEMIES.map(function (e) { const x0 = colx(e.s, e.a), x1 = colx(e.s, e.b) + T; const o = { t: e.t, v: e.v, x0: x0, x1: x1, x: x0 + 20, dir: 1, st: 'fly', tm: 2 + Math.random() * 2, y: 0 }; if (e.t === 'crab') crabInit(o); return o; });
+    this.crabG = this.add.graphics().setDepth(1.45);   // el cangrejo se dibuja detras del agua (depth 1.5): lo que queda bajo la superficie se ve sumergido
     this.enG = this.add.graphics().setDepth(4);
     this.shark = { dx: colx(SHARK_DEN.s, SHARK_DEN.c) + T / 2, x: 0, y: 0, d: 1, st: 'hide', tm: 0, cd: 3 };
     if (!document.body.classList.contains('color')) {   // pozo de luz: el mundo se hunde en sombra lejos del personaje
@@ -1112,8 +1136,76 @@ class Level extends Phaser.Scene {
     }
   }
 
+  crabPuff(e, n, big) {   // arena que levanta al pisar o al sobresaltarse (solo bajo el agua)
+    for (let i = 0; i < n; i++) e.puffs.push({ x: e.x + (Math.random() - 0.5) * 40, y: GY - 2 - Math.random() * 3, vx: (Math.random() - 0.5) * 14, vy: -(5 + Math.random() * 9), r: (big ? 3 : 2) + Math.random() * 2, t: 0 });
+  }
+
+  updateCrab(e, dt, time, G) {   // el cangrejo camina de lado a rafagas, reacciona al jugador y se comporta distinto cuando el agua sube
+    const R = Math.random, clamp = Phaser.Math.Clamp, px = this.player.x, dx = px - e.x, sy = this.surfY(zoneOf(e.x));
+    const wet = clamp((GY - sy - 6) / 26, 0, 1), prevWet = e.wet; e.wet = wet;           // 0 = seco, 1 = totalmente sumergido
+    const near = Math.abs(dx) < 230, prox = Math.max(0, 1 - Math.abs(dx) / 520) * (1 - 0.5 * wet);   // prox: volumen segun cercania (apagado bajo el agua)
+    // el agua le llega: se sobresalta; el agua se va: se sacude
+    if (prevWet < 0.35 && wet >= 0.35 && e.mode !== 'startle') { e.mode = 'startle'; e.mt = 0.8; this.crabPuff(e, 6, true); for (let i = 0; i < 6; i++) e.bubbles.push({ x: e.x + (R() - 0.5) * 20, y: GY - 16, vy: -(30 + R() * 25), r: 1.2 + R() * 2.2, ph: R() * 6 }); SFX.clack(prox); }
+    if (prevWet > 0.3 && wet <= 0.3 && wet < prevWet) e.shake = 0.6;
+    e.shake = Math.max(0, e.shake - dt);
+    // salto de nado: sumergido, de vez en cuando se impulsa y flota unos instantes con las patas remando
+    let hopLift = 0;
+    if (e.hop > 0) { e.hop -= dt; hopLift = 13 * Math.sin(Math.PI * clamp(1 - e.hop / 0.75, 0, 1)); if (e.hop <= 0) { e.hop = 0; this.crabPuff(e, 3, false); } }
+    else if (wet > 0.9 && (e.mode === 'walk' || e.mode === 'pause')) { e.hopT -= dt; if (e.hopT <= 0) { e.hop = 0.75; e.hopT = 4 + R() * 4; } }
+    // maquina de estados
+    e.mt -= dt;
+    const wm = 1 - 0.45 * wet;   // bajo el agua las pausas son mas cortas: esta mas activo
+    let tsp = 0, stHop = 0;
+    if (e.mode === 'walk') { tsp = 1; if (e.mt <= 0) { e.mode = 'pause'; e.mt = (0.45 + R() * 0.9) * wm; e.idle = ['groom', 'wave', 'look', 'none'][Math.floor(R() * 4)]; e.idleSide = R() < 0.5 ? 0 : 1; } }
+    else if (e.mode === 'pause') { if (e.mt <= 0) { if (near && R() < (wet < 0.3 ? 0.7 : 0.35)) { e.mode = 'threat'; e.mt = 1 + R() * 0.6; } else { e.mode = 'walk'; e.mt = 0.9 + R() * 1.0; } } }
+    else if (e.mode === 'threat') { if (e.mt <= 0) { e.mode = 'walk'; e.mt = 0.9 + R() * 1.0; } }
+    else if (e.mode === 'turn') { if (e.mt <= 0) { e.dir = -e.dir; e.mode = 'walk'; e.mt = 0.9 + R() * 1.0; } }
+    else if (e.mode === 'startle') { stHop = 6 * Math.sin(Math.PI * clamp(1 - e.mt / 0.8, 0, 1)) * (e.mt > 0 ? 1 : 0); if (e.mt <= 0) { e.mode = 'walk'; e.mt = 0.9 + R() * 1.0; } }
+    // movimiento: arranca y frena con inercia, mas rapido en rafaga; el promedio sigue siendo ~ la velocidad original
+    e.sp += (tsp - e.sp) * Math.min(1, dt * (tsp > e.sp ? 7 : 11));
+    const mv = e.sp * e.v * 1.45 * (1 + 0.18 * wet) * dt * e.dir;
+    e.x += mv;
+    if (e.x > e.x1 - 20) { e.x = e.x1 - 20; if (e.mode === 'walk') { e.mode = 'turn'; e.mt = 0.4; } }
+    else if (e.x < e.x0 + 20) { e.x = e.x0 + 20; if (e.mode === 'walk') { e.mode = 'turn'; e.mt = 0.4; } }
+    e.ph += Math.abs(mv) * 0.35 + (e.hop > 0 ? dt * 14 : 0);   // ciclo de patas ligado a la distancia: los pies no patinan
+    e.lift = wet * 2.6 + hopLift + stHop;
+    e.stepT += Math.abs(mv);
+    if (e.stepT > 9) { e.stepT -= 9; if (wet < 0.5) SFX.skitter(prox); else if (R() < 0.8) this.crabPuff(e, 1, false); }
+    // pinzas, boca y ojos: objetivos segun el modo
+    const flo = wet * (0.35 + 0.12 * Math.sin(time / 480)), clT = [flo, flo], grT = [0, 0], opT = [0.1, 0.1];
+    let eyeT = 0.45 + 0.35 * wet, lookT = near ? clamp(dx / 70, -1, 1) : Math.sin(time / 900 + e.x0) * 0.7;
+    if (e.mode === 'walk') { clT[0] += 0.1 + 0.1 * Math.sin(e.ph) * e.sp; clT[1] += 0.1 + 0.1 * Math.sin(e.ph + Math.PI) * e.sp; if (!near) lookT = e.dir * 0.8; }
+    else if (e.mode === 'pause') {
+      const i = e.idleSide;
+      if (e.idle === 'groom') { grT[i] = 0.7 + 0.3 * Math.sin(time / 120); opT[i] = 0.45 + 0.45 * Math.sin(time / 120); }
+      else if (e.idle === 'wave') { clT[i] = 0.8 + 0.2 * Math.sin(time / 170); opT[i] = 0.3 + 0.3 * Math.sin(time / 170 + 1); }
+      else if (e.idle === 'look') { lookT = Math.sin(time / 380) * 1.1; eyeT = 0.9; }
+    } else if (e.mode === 'threat') {
+      clT[0] = clT[1] = 1; eyeT = 1; opT[0] = 0.5 + 0.5 * Math.sin(time / 55); opT[1] = 0.5 + 0.5 * Math.sin(time / 55 + 2.4);
+      if (e.op[0] > 0.8 && !e.clk) { e.clk = true; SFX.clack(prox); } else if (e.op[0] < 0.3) e.clk = false;
+    } else if (e.mode === 'turn') { clT[0] = clT[1] = 0.55; eyeT = 0.9; opT[0] = opT[1] = 0.3; }
+    else if (e.mode === 'startle') { clT[0] = clT[1] = 1; eyeT = 1; opT[0] = opT[1] = 1; }
+    if (e.hop > 0) { clT[0] = clT[1] = 0.85; opT[0] = opT[1] = 0.6; }
+    for (let i = 0; i < 2; i++) { e.cl[i] += (clT[i] - e.cl[i]) * Math.min(1, dt * 10); e.gr[i] += (grT[i] - e.gr[i]) * Math.min(1, dt * 10); e.op[i] += (opT[i] - e.op[i]) * Math.min(1, dt * 18); }
+    e.eyeUp += (eyeT - e.eyeUp) * Math.min(1, dt * 9); e.look += (lookT - e.look) * Math.min(1, dt * 8);
+    // burbujas: sumergido suelta burbujas por la boca; revientan en la superficie
+    if (wet > 0.6) { e.bt -= dt; if (e.bt <= 0) { const n = 1 + (R() < 0.4 ? 1 : 0); for (let i = 0; i < n; i++) e.bubbles.push({ x: e.x + e.dir * 3 + (R() - 0.5) * 3, y: GY - 15 - e.lift - i * 4, vy: -(26 + R() * 18), r: 1.2 + R() * 2, ph: R() * 6 }); e.bt = (e.mode === 'threat' ? 0.2 : 0.5) + R() * 1.1; } }
+    for (let i = e.bubbles.length - 1; i >= 0; i--) {
+      const b = e.bubbles[i]; b.y += b.vy * dt; b.x += Math.sin(time / 230 + b.ph) * 10 * dt;
+      if (b.y <= sy + 2) { e.pops.push({ x: b.x, y: sy + 1, t: 0 }); e.bubbles.splice(i, 1); }
+    }
+    for (let i = e.pops.length - 1; i >= 0; i--) { e.pops[i].t += dt; if (e.pops[i].t > 0.4) e.pops.splice(i, 1); }
+    for (let i = e.puffs.length - 1; i >= 0; i--) { const p = e.puffs[i]; p.t += dt / 0.9; p.x += p.vx * dt; p.y += p.vy * dt; p.r += dt * 3; if (p.t >= 1) e.puffs.splice(i, 1); }
+    // dibujo
+    drawCrab(this.crabG, e, GY, time);
+    e.puffs.forEach(function (p) { G.fillStyle(0x93a3a8, 0.35 * (1 - p.t)); G.fillCircle(p.x, p.y, p.r); });
+    e.bubbles.forEach(function (b) { G.lineStyle(1, 0xdff1ff, 0.8); G.strokeCircle(b.x, b.y, b.r); G.fillStyle(0xffffff, 0.5); G.fillCircle(b.x - b.r * 0.3, b.y - b.r * 0.3, 0.6); });
+    e.pops.forEach(function (p) { G.lineStyle(1.2, 0xdff1ff, 0.6 * (1 - p.t / 0.4)); G.strokeEllipse(p.x, p.y, 6 + p.t * 50, 2 + p.t * 8); });
+    G.fillStyle(0x070b10, 1); G.lineStyle(3, 0x070b10, 1);
+  }
+
   updateEnemies(dt, pb, sec, time) {   // enemigos en silueta; el agua decide cuando son peligrosos
-    const G = this.enG; G.clear();
+    const G = this.enG; G.clear(); this.crabG.clear();
     this.progEl = this.progEl || document.getElementById('prog-dot');
     if (this.progEl) this.progEl.style.left = Math.min(100, Math.max(0, this.player.x / LW * 100)) + '%';
     this.hitRects = [];
@@ -1126,9 +1218,8 @@ class Level extends Phaser.Scene {
     for (let i = 0; i < this.en.length; i++) {
       const e = this.en[i], z = zoneOf(e.x), hi = this.waters[z].level;
       if (e.t === 'crab') {
-        patrol(e); const x = e.x, y = GY - 12;
-        drawCrab(G, x, GY, time);
-        if (hit(x, GY - 15, 64, 30)) { this.die('crab', sec); return true; }
+        this.updateCrab(e, dt, time, G);
+        if (hit(e.x, GY - 15 - e.lift, 64, 30)) { this.die('crab', sec); return true; }   // la caja de dano sigue al cuerpo (si salta nadando, sube con el)
       } else {   // pelicano: vuela alto; si el agua esta alta avisa, se lanza en picada, se queda un instante y sube
         const yFly = GY - HIGH_H - 90, yS = this.surfY(z) + 4; e.tm -= dt;
         if (e.st === 'fly') { patrol(e); e.y = yFly + Math.sin(time / 300 + e.x0) * 5; if (e.tm <= 0) { if (hi > 0.85) { e.st = 'warn'; e.tm = 0.7; } else e.tm = 2; } }
@@ -1176,7 +1267,7 @@ class Level extends Phaser.Scene {
   }
 
   resetEnemies() {   // al morir, todos los enemigos vuelven a su estado inicial (ningun ataque queda a medias)
-    this.en.forEach(function (e) { e.x = e.x0 + 20; e.dir = 1; e.st = 'fly'; e.tm = 2 + Math.random() * 2; e.y = 0; });
+    this.en.forEach(function (e) { e.x = e.x0 + 20; e.dir = 1; e.st = 'fly'; e.tm = 2 + Math.random() * 2; e.y = 0; if (e.t === 'crab') crabInit(e); });
     Object.assign(this.shark, { st: 'hide', cd: 3, tm: 0, splashed: false });
   }
 
