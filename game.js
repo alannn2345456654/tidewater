@@ -169,6 +169,8 @@ const SFX = (function () {
     die: function () { tone(440, 0.5, 'sawtooth', 0.12, 0, 70); noise(0.35, 0.22, 1400, 150, 0, 0.7); },
     win: function () { [523, 659, 784, 1047, 1319].forEach(function (f, i) { tone(f, i === 4 ? 0.5 : 0.18, 'triangle', 0.12, i * 0.11); }); },
     clack: function (v) { if (!(v > 0.03)) return; if (can('clack', 130)) { noise(0.06, 0.5 * v, 3400, 1500, 0, 3); tone(2100, 0.05, 'square', 0.1 * v, 0, 900); } },   // pinza que chasquea
+    flap: function (v) { if (!(v > 0.03)) return; if (can('flap', 220)) noise(0.16, 0.22 * v, 500, 180, 0, 0.8); },                       // aleteo: soplido grave
+    caw: function (v) { if (!(v > 0.03)) return; if (can('caw', 1500)) { tone(560, 0.28, 'sawtooth', 0.09 * v, 0, 300); tone(580, 0.22, 'square', 0.04 * v, 0.1, 330); } },   // graznido de aviso
     skitter: function (v) { if (!(v > 0.03)) return; if (can('skitter', 170)) { noise(0.05, 0.35 * v, 2400, 4200, 0, 3); tone(1500 + Math.random() * 500, 0.03, 'square', 0.05 * v, 0, 800); } },                                        // patitas en el suelo
     ui: function () { tone(700, 0.05, 'square', 0.05); }
   };
@@ -349,15 +351,21 @@ function crabInit(e) {
     bubbles: [], pops: [], puffs: [], bt: 1.2, hop: 0, hopT: 3 + Math.random() * 3, idle: 'none', idleSide: 1, stepT: 0, clackLast: 0 });
 }
 
-const BIRD_K = 1.3;   // escala del dibujo del ave (la caja de dano se calcula con la misma escala)
-function drawBird(G, ox, oy, d, st, time) {   // ave carronera: cuello pelado, pico ganchudo, alas largas con plumas separadas
-  G.save(); G.translateCanvas(ox, oy); G.scaleCanvas(BIRD_K, BIRD_K); const x = 0, y = 0;
-  drawBirdLocal(G, x, y, d, st, time); G.restore();
+function birdInit(e) {
+  Object.assign(e, { fd: 1, fp: 0, flap: 0, fmode: 'flap', ft: 1.2, head: 0.3, pitch: 0, pst: 'fly', drops: [], rings: [], dropT: 0, flaps: 0 });
 }
-function drawBirdLocal(G, x, y, d, st, time) {
-  const flap = Math.sin(time / (st === 'warn' ? 50 : 150));
+
+const BIRD_K = 1.3;   // escala del dibujo del ave (la caja de dano se calcula con la misma escala)
+function drawBird(G, ox, oy, d, st, time, b) {   // ave carronera: cuello pelado, pico ganchudo, alas largas con plumas separadas. b = estado visual (aleteo, cabeza, inclinacion)
+  G.save(); G.translateCanvas(ox, oy); G.scaleCanvas(BIRD_K, BIRD_K); if (b && st !== 'dive' && st !== 'stay') G.rotateCanvas(-d * b.pitch); const x = 0, y = 0;
+  drawBirdLocal(G, x, y, d, st, time, b); G.restore();
+}
+function drawBirdLocal(G, x, y, d, st, time, b) {
+  const flap = b ? b.flap : Math.sin(time / (st === 'warn' ? 50 : 150));
   G.fillStyle(INK, 1);
   if (st === 'dive' || st === 'stay') {   // picada: alas pegadas hacia atras, cuerpo vertical, pico abajo
+    if (st === 'dive') { G.lineStyle(1, 0xcfe8ff, 0.4); G.lineBetween(x - 7, y - 30, x - 7, y - 58); G.lineBetween(x + 7, y - 34, x + 7, y - 66); G.lineBetween(x, y - 28, x, y - 52); }   // lineas de velocidad
+    G.fillStyle(INK, 1);
     G.fillTriangle(x - 4, y - 8, x + 4, y - 8, x, y - 26);                                   // cola
     G.fillEllipse(x, y - 2, 15, 26);                                                          // cuerpo
     G.fillTriangle(x - 6, y - 10, x - 17, y - 22, x - 5, y + 8); G.fillTriangle(x + 6, y - 10, x + 17, y - 22, x + 5, y + 8);   // alas hacia atras
@@ -381,11 +389,12 @@ function drawBirdLocal(G, x, y, d, st, time) {
   G.fillTriangle(x - d * 16, y, x - d * 16, y + 3, x - d * 36, y + 4);
   G.fillEllipse(x, y, 34, 15);                                                                 // cuerpo
   rimEllipse(G, x, y, 17, 7.5, Math.PI + 0.3, 2 * Math.PI - 0.5, 1.3, 0.7);
-  G.lineStyle(5, INK, 1); G.lineBetween(x + d * 11, y - 2, x + d * 19, y - 9);                // cuello largo
-  G.fillStyle(INK, 1); G.fillCircle(x + d * 21, y - 10, 5);                                    // cabeza
-  G.fillTriangle(x + d * 24, y - 13, x + d * 24, y - 7, x + d * 36, y - 6);                  // pico
-  G.fillTriangle(x + d * 31, y - 7, x + d * 36, y - 6, x + d * 33, y - 1);                   // gancho
-  eyeGlow(G, x + d * 22, y - 11, 1.4);
+  const hd = b ? b.head : 0, hx = -hd * 2, hy = hd * 7;   // la cabeza baja y se adelanta menos cuando mira hacia abajo
+  G.lineStyle(5, INK, 1); G.lineBetween(x + d * 11, y - 2, x + d * (19 + hx), y - 9 + hy);   // cuello largo
+  G.fillStyle(INK, 1); G.fillCircle(x + d * (21 + hx), y - 10 + hy, 5);                        // cabeza
+  G.fillTriangle(x + d * (24 + hx), y - 13 + hy, x + d * (24 + hx), y - 7 + hy, x + d * (36 + hx * 0.4), y - 6 + hy * 1.5);   // pico
+  G.fillTriangle(x + d * (31 + hx * 0.5), y - 7 + hy * 1.3, x + d * (36 + hx * 0.4), y - 6 + hy * 1.5, x + d * (33 + hx * 0.4), y - 1 + hy * 1.7);   // gancho
+  eyeGlow(G, x + d * (22 + hx), y - 11 + hy, 1.4);
   wing(x + d * 1, y - 3, 1.05, -flap * 2);        // ala cercana
 }
 
@@ -698,7 +707,7 @@ class Level extends Phaser.Scene {
     flag(this, this.goalX, 0xffd60a);
 
     // Jugador
-    this.en = ENEMIES.map(function (e) { const x0 = colx(e.s, e.a), x1 = colx(e.s, e.b) + T; const o = { t: e.t, v: e.v, x0: x0, x1: x1, x: x0 + 20, dir: 1, st: 'fly', tm: 2 + Math.random() * 2, y: 0 }; if (e.t === 'crab') crabInit(o); return o; });
+    this.en = ENEMIES.map(function (e) { const x0 = colx(e.s, e.a), x1 = colx(e.s, e.b) + T; const o = { t: e.t, v: e.v, x0: x0, x1: x1, x: x0 + 20, dir: 1, st: 'fly', tm: 2 + Math.random() * 2, y: 0 }; if (e.t === 'crab') crabInit(o); else birdInit(o); return o; });
     this.crabG = this.add.graphics().setDepth(1.45);   // el cangrejo se dibuja detras del agua (depth 1.5): lo que queda bajo la superficie se ve sumergido
     this.enG = this.add.graphics().setDepth(4);
     this.shark = { dx: colx(SHARK_DEN.s, SHARK_DEN.c) + T / 2, x: 0, y: 0, d: 1, st: 'hide', tm: 0, cd: 3 };
@@ -1204,6 +1213,31 @@ class Level extends Phaser.Scene {
     G.fillStyle(0x070b10, 1); G.lineStyle(3, 0x070b10, 1);
   }
 
+  birdVis(e, dt, time, yS, prox) {   // capa visual del pelicano: aleteo en rafagas y planeo, giro suave, cabeza que baja a mirar, gotas y ondas al salir del agua
+    const R = Math.random, k = function (r) { return Math.min(1, dt * r); };
+    e.fd += (e.dir - e.fd) * k(6);                                           // al dar la vuelta se achica y se voltea (no cambia de golpe)
+    if (e.st === 'fly') { e.ft -= dt; if (e.ft <= 0) { e.fmode = e.fmode === 'flap' ? 'glide' : 'flap'; e.ft = e.fmode === 'flap' ? 1 + R() * 0.9 : 0.9 + R() * 1.2; } } else e.fmode = 'flap';
+    const rate = e.st === 'warn' ? 20 : (e.st === 'rise' ? 13 : 8.5);        // rad/s
+    if (e.fmode === 'flap') e.fp += rate * dt;
+    const tgt = e.fmode === 'glide' ? 0.55 + 0.1 * Math.sin(time / 700) : Math.sin(e.fp);
+    e.flap += (tgt - e.flap) * k(e.fmode === 'glide' ? 5 : 30);
+    const bobY = e.fmode === 'glide' ? Math.sin(time / 1300) * 2 : Math.cos(e.fp) * (e.st === 'rise' ? 3.5 : 2.2);   // sube en cada aleteo hacia abajo
+    const pT = e.st === 'rise' ? 0.38 : (e.st === 'warn' ? 0.18 : (e.fmode === 'glide' ? -0.12 : 0.05 * Math.cos(e.fp)));
+    e.pitch += (pT - e.pitch) * k(6);
+    const hT = e.st === 'warn' ? 1 : (e.fmode === 'glide' ? 0.45 : 0.25);
+    e.head += (hT - e.head) * k(7);
+    const n = Math.floor((e.fp + Math.PI / 2) / (Math.PI * 2));              // sonido: un soplido por aleteo, graznido al avisar
+    if (n !== e.flaps) { e.flaps = n; if (e.fmode === 'flap') SFX.flap(prox); }
+    if (e.st === 'warn' && e.pst !== 'warn') SFX.caw(prox);
+    if (e.st === 'stay' && e.pst !== 'stay') e.rings.push({ x: e.x, y: yS, t: 0 });
+    if (e.st === 'rise' && e.pst === 'stay') { e.rings.push({ x: e.x, y: yS, t: 0 }); e.dropT = 0.7; }
+    e.pst = e.st;
+    if (e.dropT > 0) { e.dropT -= dt; if (R() < dt * 30) e.drops.push({ x: e.x + (R() - 0.5) * 26, y: e.y + 4, vx: (R() - 0.5) * 12, vy: 10 + R() * 20 }); }
+    for (let i = e.drops.length - 1; i >= 0; i--) { const d = e.drops[i]; d.vy += 260 * dt; d.x += d.vx * dt; d.y += d.vy * dt; if (d.y >= yS) { e.rings.push({ x: d.x, y: yS, t: 0.45, small: true }); e.drops.splice(i, 1); } }
+    for (let i = e.rings.length - 1; i >= 0; i--) { e.rings[i].t += dt; if (e.rings[i].t > 0.8) e.rings.splice(i, 1); }
+    return { flap: e.flap, head: e.head, pitch: e.pitch, bobY: bobY };
+  }
+
   updateEnemies(dt, pb, sec, time) {   // enemigos en silueta; el agua decide cuando son peligrosos
     const G = this.enG; G.clear(); this.crabG.clear();
     this.progEl = this.progEl || document.getElementById('prog-dot');
@@ -1229,7 +1263,11 @@ class Level extends Phaser.Scene {
         else { patrol(e); e.y = yFly + (yS - yFly) * (Math.max(0, e.tm) / 0.7); if (e.tm <= 0) { e.st = 'fly'; e.tm = 3 + Math.random() * 3; } }
         const x = e.x, y = e.y, d = e.dir, diving = e.st === 'dive' || e.st === 'stay';
         if (e.st === 'warn') { G.lineStyle(2, 0xcfe8ff, 0.5); G.strokeEllipse(x, yS, 44 + Math.sin(time / 90) * 8, 8); G.lineStyle(3, 0x070b10, 1); }
-        drawBird(G, x, y, d, e.st, time);
+        const bv = this.birdVis(e, dt, time, yS, Math.max(0, 1 - Math.abs(this.player.x - e.x) / 700));
+        e.rings.forEach(function (r) { const a = 0.6 * (1 - r.t / 0.8); G.lineStyle(r.small ? 1 : 1.6, 0xdff1ff, a); G.strokeEllipse(r.x, r.y, (r.small ? 4 : 10) + r.t * (r.small ? 30 : 100), 2 + r.t * (r.small ? 4 : 12)); });
+        e.drops.forEach(function (q) { G.fillStyle(0x9ad0ff, 0.85); G.fillCircle(q.x, q.y, 1.3); });
+        G.lineStyle(3, 0x070b10, 1);
+        drawBird(G, x, y + (diving ? 0 : bv.bobY), e.fd, e.st, time, bv);   // la picada no cambia: misma posicion y caja de dano
         if (diving && hit(x, y + 12, 34, 92)) { this.die('pelican', sec); return true; }
       }
     }
@@ -1267,7 +1305,7 @@ class Level extends Phaser.Scene {
   }
 
   resetEnemies() {   // al morir, todos los enemigos vuelven a su estado inicial (ningun ataque queda a medias)
-    this.en.forEach(function (e) { e.x = e.x0 + 20; e.dir = 1; e.st = 'fly'; e.tm = 2 + Math.random() * 2; e.y = 0; if (e.t === 'crab') crabInit(e); });
+    this.en.forEach(function (e) { e.x = e.x0 + 20; e.dir = 1; e.st = 'fly'; e.tm = 2 + Math.random() * 2; e.y = 0; if (e.t === 'crab') crabInit(e); else birdInit(e); });
     Object.assign(this.shark, { st: 'hide', cd: 3, tm: 0, splashed: false });
   }
 

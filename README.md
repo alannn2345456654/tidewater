@@ -94,3 +94,9 @@ Las torres miden `WALL_H` (156 px), 36 px mas que el agua alta: el agua nunca la
 
 ## Vercel Speed Insights
 - `index.html` incluye el snippet de Speed Insights para sitios estaticos (sin npm). En Vercel: Speed Insights > Enable en el proyecto, `vercel --prod`, visita el sitio y espera ~30 s. En local el script da 404, es normal y no afecta al juego.
+
+## v14: pelicano mas vivo
+- Vuela con aleteo en rafagas y planeo con las alas abiertas; el cuerpo sube con cada aleteo y se inclina (sube al despegar, baja al planear). Al dar la vuelta se achica y se voltea suavemente en vez de cambiar de golpe.
+- Avisa cerniendose con aleteo rapido, la cabeza baja mirando el agua y un graznido. En picada deja lineas de velocidad; al entrar al agua y al salir hay ondas, y al despegar sacude gotas.
+- Sonido: soplido por aleteo y graznido de aviso (suenan segun la cercania).
+- Jugabilidad igual: mismos tiempos, misma picada y misma caja de dano (26x84 en picada).
