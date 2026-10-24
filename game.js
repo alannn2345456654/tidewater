@@ -168,8 +168,8 @@ const SFX = (function () {
     warn: function () { if (can('warn', 900)) { tone(880, 0.07, 'square', 0.05); tone(880, 0.07, 'square', 0.05, 0.13); } },
     die: function () { tone(440, 0.5, 'sawtooth', 0.12, 0, 70); noise(0.35, 0.22, 1400, 150, 0, 0.7); },
     win: function () { [523, 659, 784, 1047, 1319].forEach(function (f, i) { tone(f, i === 4 ? 0.5 : 0.18, 'triangle', 0.12, i * 0.11); }); },
-    clack: function (v) { if (can('clack', 130)) { noise(0.045, 0.16 * v, 3400, 1500, 0, 3); tone(2100, 0.035, 'square', 0.03 * v, 0, 900); } },   // pinza que chasquea
-    skitter: function (v) { if (can('skitter', 170)) noise(0.035, 0.07 * v, 2600, 4200, 0, 2.5); },                                        // patitas en el suelo
+    clack: function (v) { if (!(v > 0.03)) return; if (can('clack', 130)) { noise(0.06, 0.5 * v, 3400, 1500, 0, 3); tone(2100, 0.05, 'square', 0.1 * v, 0, 900); } },   // pinza que chasquea
+    skitter: function (v) { if (!(v > 0.03)) return; if (can('skitter', 170)) { noise(0.05, 0.35 * v, 2400, 4200, 0, 3); tone(1500 + Math.random() * 500, 0.03, 'square', 0.05 * v, 0, 800); } },                                        // patitas en el suelo
     ui: function () { tone(700, 0.05, 'square', 0.05); }
   };
   if (enabled) ['pointerdown', 'keydown', 'touchstart'].forEach(function (ev) { window.addEventListener(ev, api.unlock, { passive: true }); });
@@ -1143,7 +1143,7 @@ class Level extends Phaser.Scene {
   updateCrab(e, dt, time, G) {   // el cangrejo camina de lado a rafagas, reacciona al jugador y se comporta distinto cuando el agua sube
     const R = Math.random, clamp = Phaser.Math.Clamp, px = this.player.x, dx = px - e.x, sy = this.surfY(zoneOf(e.x));
     const wet = clamp((GY - sy - 6) / 26, 0, 1), prevWet = e.wet; e.wet = wet;           // 0 = seco, 1 = totalmente sumergido
-    const near = Math.abs(dx) < 230, prox = Math.max(0, 1 - Math.abs(dx) / 520) * (1 - 0.5 * wet);   // prox: volumen segun cercania (apagado bajo el agua)
+    const near = Math.abs(dx) < 230, prox = Math.max(0, 1 - Math.abs(dx) / 700) * (1 - 0.5 * wet);   // prox: volumen segun cercania (apagado bajo el agua)
     // el agua le llega: se sobresalta; el agua se va: se sacude
     if (prevWet < 0.35 && wet >= 0.35 && e.mode !== 'startle') { e.mode = 'startle'; e.mt = 0.8; this.crabPuff(e, 6, true); for (let i = 0; i < 6; i++) e.bubbles.push({ x: e.x + (R() - 0.5) * 20, y: GY - 16, vy: -(30 + R() * 25), r: 1.2 + R() * 2.2, ph: R() * 6 }); SFX.clack(prox); }
     if (prevWet > 0.3 && wet <= 0.3 && wet < prevWet) e.shake = 0.6;

@@ -91,3 +91,6 @@ Las torres miden `WALL_H` (156 px), 36 px mas que el agua alta: el agua nunca la
 - Agua: al llegarle se sobresalta (salto, pinzas arriba, burbujas y arena). Sumergido esta mas activo, flota con las pinzas en alto, suelta burbujas que revientan en la superficie y de vez en cuando nada un saltito. Al irse el agua se sacude.
 - Se dibuja detras del agua, asi que lo que queda bajo la superficie se ve sumergido.
 - Jugabilidad: misma caja de dano (56x22) y misma velocidad media; la caja sube con el cuerpo si salta nadando.
+
+## Vercel Speed Insights
+- `index.html` incluye el snippet de Speed Insights para sitios estaticos (sin npm). En Vercel: Speed Insights > Enable en el proyecto, `vercel --prod`, visita el sitio y espera ~30 s. En local el script da 404, es normal y no afecta al juego.
