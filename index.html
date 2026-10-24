@@ -43,19 +43,71 @@
   .gpb{display:none;position:absolute;left:50%;top:100%;transform:translate(-50%,7px);min-width:18px;height:18px;padding:0 6px;box-sizing:border-box;border-radius:9px;background:var(--c,#4b5563);color:#fff;font:700 10px/18px system-ui,sans-serif;letter-spacing:.03em;text-align:center;white-space:nowrap;box-shadow:0 1px 5px rgba(0,0,0,.6);pointer-events:none;z-index:30}
   .gpb::before{content:"";position:absolute;left:50%;top:-4px;margin-left:-4px;border:4px solid transparent;border-top:0;border-bottom:4px solid var(--c,#4b5563)}
   body.pad .gpb{display:block}
+
+  #title{overflow:hidden}
+  #title .w{position:absolute;left:0;right:0;bottom:0;background-repeat:repeat-x;background-size:1200px 100%;pointer-events:none}
+  #title .w1{height:38%;opacity:.35;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 200' preserveAspectRatio='none'%3E%3Cpath d='M0 60 Q150 20 300 60 T600 60 T900 60 T1200 60 V200 H0Z' fill='%23174a6b'/%3E%3C/svg%3E");animation:wv 26s linear infinite}
+  #title .w2{height:30%;opacity:.5;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 200' preserveAspectRatio='none'%3E%3Cpath d='M0 70 Q100 30 200 70 T400 70 T600 70 T800 70 T1000 70 T1200 70 V200 H0Z' fill='%23103a55'/%3E%3C/svg%3E");animation:wv 17s linear infinite reverse}
+  #title .w3{height:22%;opacity:.8;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 200' preserveAspectRatio='none'%3E%3Cpath d='M0 80 Q150 40 300 80 T600 80 T900 80 T1200 80 V200 H0Z' fill='%230a2a40'/%3E%3C/svg%3E");animation:wv 11s linear infinite}
+  @keyframes wv{from{background-position-x:0}to{background-position-x:-1200px}}
+  #bubs{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  #bubs i{position:absolute;bottom:-20px;border-radius:50%;border:1.5px solid rgba(154,208,255,.45);background:rgba(154,208,255,.08);animation:rise linear infinite}
+  @keyframes rise{from{transform:translateY(0);opacity:0}12%{opacity:.8}to{transform:translateY(-105vh);opacity:0}}
+  #title .tbox{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:14px}
+  #title .sub{margin:-6px 0 8px;color:#7fa6bf;letter-spacing:.18em;font-size:13px;text-transform:uppercase}
+  #title .mbtns{display:flex;flex-direction:column;gap:22px;align-items:center}
+  #title .mbtns button{min-width:190px}
+  button.msel{outline:3px solid #ffd166;outline-offset:3px;background:#1d4f73}
+  #panel label.msel{outline:2px solid #ffd166;outline-offset:4px;border-radius:6px}
+  #panel button{margin-top:2px}
+  #levels{position:fixed;inset:0;z-index:15;display:none;align-items:center;justify-content:center;flex-direction:column;gap:26px;background:radial-gradient(ellipse at 50% 30%,#12324a,#06121a 70%)}
+  #levels h2{margin:0;font-size:32px;font-weight:300;letter-spacing:.22em;text-transform:uppercase;color:#cdd6dc}
+  #cards{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;padding:0 16px}
+  .card{position:relative;width:208px;min-height:236px;padding:18px 16px;box-sizing:border-box;border-radius:14px;border:2px solid #2f5f86;background:rgba(18,50,74,.75);color:#e8f1f8;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:8px;font:inherit;transition:transform .12s,border-color .12s,background .12s}
+  .card .num{width:34px;height:34px;border-radius:50%;border:2px solid #9ad0ff;display:flex;align-items:center;justify-content:center;font-weight:700;color:#9ad0ff}
+  .card h3{margin:4px 0 0;font-size:24px;font-weight:600}
+  .card p{margin:0;font-size:13px;line-height:1.4;color:#9db6c8;flex:1}
+  .card .meta{font-size:12px;color:#9ad0ff}
+  .card:hover,.card.msel{transform:translateY(-4px);border-color:#ffd166;background:rgba(29,79,115,.9)}
+  .card.locked{opacity:.5;cursor:not-allowed}.card.locked .num{border-color:#6b7f90;color:#6b7f90}.card.locked h3{color:#8fa3b3}
+  .card.deny{animation:shake .3s}
+  @keyframes shake{25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+  body.pad .card .gpb{display:none}body.pad .card.msel .gpb{display:block}
+  #lv-back,#end-menu{padding:10px 22px;font-size:18px;border-radius:8px;border:2px solid #9ad0ff;background:#12324a;color:#fff;cursor:pointer;position:relative}
+  #lv-back:hover,#end-menu:hover{background:#1d4f73}
+  .endbtns{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+  body:not(.ingame) #prog{display:none}
+  #toast{position:fixed;top:72px;left:50%;transform:translate(-50%,-10px);padding:8px 18px;border-radius:18px;background:rgba(6,18,26,.85);border:1px solid #ffd166;color:#ffe9a8;font-size:15px;letter-spacing:.04em;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:13}
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+  #lvltitle{position:fixed;left:0;right:0;top:28%;text-align:center;z-index:13;pointer-events:none;opacity:0;transform:translateY(10px);transition:opacity .6s,transform .6s}
+  #lvltitle.show{opacity:1;transform:none}
+  #lvltitle h2{margin:0;font-size:54px;font-weight:300;letter-spacing:.22em;text-transform:uppercase;text-shadow:0 0 24px rgba(154,208,255,.45)}
+  #lvltitle p{margin:10px 0 0;color:#9ad0ff;letter-spacing:.04em}
+  #lowhp{position:fixed;inset:0;z-index:9;pointer-events:none;opacity:0;box-shadow:inset 0 0 140px 30px rgba(230,57,70,.6)}
+  body.lowhp #lowhp{animation:hb 1s ease-in-out infinite}
+  @keyframes hb{0%,100%{opacity:.12}15%{opacity:.85}30%{opacity:.22}45%{opacity:.6}}
+  @media (max-width:600px){#title h1{font-size:44px}.card{width:100%;min-height:0}#lvltitle h2{font-size:34px}}
   body:not(.color)::after{content:"";position:fixed;inset:0;z-index:9;pointer-events:none;background:radial-gradient(ellipse at 50% 50%,transparent 50%,rgba(0,0,0,.55) 100%)}
 </style>
 </head>
 <body>
 <div id="game"></div>
 <div id="prog"><i id="prog-dot"></i></div>
-<div id="title"><h1>TIDEWATER</h1><button id="play">Play</button><small>or press any key / A</small><button id="title-cfg">Settings</button></div>
+<div id="title"><div class="w w1"></div><div class="w w2"></div><div class="w w3"></div><div id="bubs"></div>
+  <div class="tbox"><h1>TIDEWATER</h1><p class="sub">drainage tunnel &middot; puzzle platformer</p>
+    <div class="mbtns"><button id="play">Play</button><button id="title-cfg">Settings</button></div>
+    <small>press any key or A</small></div></div>
+<div id="levels"><h2>Select level</h2><div id="cards"></div><button id="lv-back">Back</button></div>
+<div id="toast"></div>
+<div id="lvltitle"><h2></h2><p></p></div>
+<div id="lowhp"></div>
 <button id="cfg" title="Settings (Esc)">⚙</button>
 <div id="panel"><h2 style="margin:0">Settings</h2>
   <label>Music <input id="vol-music" type="range" min="0" max="100"></label>
   <label>Effects <input id="vol-sfx" type="range" min="0" max="100"></label>
   <label>Mute (M) <input id="mute-opt" type="checkbox"></label>
   <label>Show hitboxes (H) <input id="hit-opt" type="checkbox"></label>
+  <button id="panel-menu">Level select</button>
   <button id="panel-close">Close</button></div>
 <button id="mute" title="Sound (M)"><span class="ico">🔊</span></button>
 <div id="touch">
@@ -70,7 +122,7 @@
     <div id="rate"><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button></div>
   </div>
   <div id="thanks">Thank you!</div>
-  <button id="again">Play again</button>
+  <div class="endbtns"><button id="again">Play again</button><button id="end-menu">Level select</button></div>
 </div>
 <!-- Vercel Speed Insights (sitio estatico). Solo reporta cuando esta desplegado en Vercel con Speed Insights activado; en local el script no existe y se ignora. -->
 <script>window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };</script>

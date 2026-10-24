@@ -122,3 +122,14 @@ Las torres miden `WALL_H` (156 px), 36 px mas que el agua alta: el agua nunca la
 - Start/Menu abre y cierra Ajustes, Select/View silencia, Y/△ reinicia el nivel (antes Start). Titulo: A o Start juega, X abre Ajustes.
 
 - Flotar quieto: caja de dano mas grande (`TREAD_HIT_W` 1.3x de ancho, `TREAD_HIT_DEEP` 22 px bajo la superficie, y 6 px mas arriba de la cabeza); el cuerpo fisico tambien algo mas ancho. Activa Mostrar hitboxes (H) para verla.
+
+## v17: menu, niveles, luces y mas
+- **Menu de inicio nuevo**: olas animadas, burbujas y botones Play / Settings. Cualquier tecla (o A) pasa a la seleccion de nivel.
+- **Seleccion de nivel**: tarjetas (Tutorial jugable; Level 2 y 3 bloqueados, "Coming soon"). Guarda mejor tiempo, fallos y gema en `localStorage['tidewater_progress']`. El nivel actual se llama **Tutorial** y muestra su titulo al empezar (`LEVELS` en game.js).
+- Desde Ajustes (y la pantalla final) hay boton **Level select** para salir al menu.
+- **Menus con teclado, mouse y control**: flechas / cruceta / stick mueven la seleccion, Enter / A acepta, Esc / B vuelve. En Ajustes izq/der cambia sliders y casillas. Start/Menu abre Ajustes; en la pantalla final, Start vuelve al menu.
+- **Luz que titila**: temblor leve siempre, rafagas con chispazo; mas seguidas con agua alta y mucho mas cuando avisa el pelicano o los pinchos de techo.
+- **Vida baja** (1 mitad): barra y vineta roja que laten, con sonido de latido.
+- **Reacciones**: pose y destello rojo al ser golpeado, chapuzon al entrar al agua, mas polvo en caidas largas.
+- **Sonido**: gotas del techo con eco (segun distancia), pasos secos o chapoteo en agua baja, sonido propio de golpe.
+- **Aviso de checkpoint**: "Checkpoint" o "Checkpoint · Health restored", con destello.

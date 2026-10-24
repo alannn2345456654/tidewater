@@ -178,6 +178,11 @@ const SFX = (function () {
     flap: function (v) { if (!(v > 0.03)) return; if (can('flap', 220)) noise(0.16, 0.22 * v, 500, 180, 0, 0.8); },                       // aleteo: soplido grave
     caw: function (v) { if (!(v > 0.03)) return; if (can('caw', 1500)) { tone(560, 0.28, 'sawtooth', 0.09 * v, 0, 300); tone(580, 0.22, 'square', 0.04 * v, 0.1, 330); } },   // graznido de aviso
     skitter: function (v) { if (!(v > 0.03)) return; if (can('skitter', 170)) { noise(0.05, 0.35 * v, 2400, 4200, 0, 3); tone(1500 + Math.random() * 500, 0.03, 'square', 0.05 * v, 0, 800); } },                                        // patitas en el suelo
+    drip: function (v) { if (!(v > 0.04)) return; if (can('drip', 90)) { [0, 0.17, 0.36].forEach(function (d, i) { tone(1500 - i * 140, 0.07, 'sine', 0.08 * v / (1 + i * 1.7), d, 700); }); } },   // gota con eco de tunel
+    step: function (wet) { if (!can('step', 140)) return; if (wet) { noise(0.13, 0.2, 1800, 500, 0, 0.8); tone(380 + Math.random() * 80, 0.06, 'sine', 0.03, 0, 200); } else noise(0.06, 0.12, 900, 300, 0, 1.2); },   // paso seco / chapoteo
+    hurt: function () { tone(300, 0.2, 'sawtooth', 0.1, 0, 110); noise(0.16, 0.2, 1600, 300, 0, 0.8); },
+    beat: function () { if (can('beat', 500)) { tone(70, 0.14, 'sine', 0.22, 0, 45); tone(62, 0.12, 'sine', 0.16, 0.17, 40); } },   // latido con la vida baja
+    zap: function () { if (can('zap', 200)) noise(0.09, 0.1, 5200, 2400, 0, 2); },                                                    // chispazo de la luz
     ui: function () { tone(700, 0.05, 'square', 0.05); }
   };
   if (enabled) ['pointerdown', 'keydown', 'touchstart'].forEach(function (ev) { window.addEventListener(ev, api.unlock, { passive: true }); });
@@ -264,18 +269,21 @@ const PADUI = {
     if (!el) return;
     const b = document.createElement('span'); b.className = 'gpb'; b.dataset.k = k; el.appendChild(b); this.badges.push(b);
   },
-  paint: function () { const me = this; this.badges.forEach(function (b) { b.textContent = me.glyph(b.dataset.k); b.style.setProperty('--c', me.color(b.dataset.k)); }); },
+  paint: function () { const me = this; this.badges = this.badges.filter(function (b) { return b.isConnected; }); this.badges.forEach(function (b) { b.textContent = me.glyph(b.dataset.k); b.style.setProperty('--c', me.color(b.dataset.k)); }); },
   set: function (a) { if (this.active !== a) { this.active = a; document.body.classList.toggle('pad', a); } },
   handle: function (edge) {
     const h = this.hooks; if (!h) return;
-    if (h.onTitle()) {                                   // titulo: A o Start juega, X abre ajustes, B o Start los cierra
-      if (h.panelOpen()) { if (edge(1) || edge(9)) h.openPanel(false); return; }
-      if (edge(0) || edge(9)) { this.blockUntil = performance.now() + 300; h.play(); } else if (edge(2)) h.openPanel(true);
+    const st = h.state(), now = performance.now();
+    const dx = ((edge(15) || edge(103)) ? 1 : 0) - ((edge(14) || edge(102)) ? 1 : 0), dy = ((edge(13) || edge(101)) ? 1 : 0) - ((edge(12) || edge(100)) ? 1 : 0);
+    if (edge(8) && SFX.available) { SFX.unlock(); SFX.toggle(); }                                  // Select / View / Share: silenciar
+    if (st.screen !== 'game' || st.panel) {                                                        // menus: cruceta o stick mueve, A acepta, B vuelve
+      if (dx || dy) h.nav(dx, dy);
+      if (edge(0) || (edge(9) && !st.panel)) { this.blockUntil = now + 300; h.ok(); }
+      else if (edge(1) || (edge(9) && st.panel)) { this.blockUntil = now + 300; h.back(); }
+      else if (edge(2) && st.screen === 'title' && !st.panel) h.openPanel(true);
       return;
     }
-    if (edge(8) && SFX.available) { SFX.unlock(); SFX.toggle(); }                              // Select / View / Share: silenciar
-    if (h.panelOpen()) { if (edge(1) || edge(9)) { h.openPanel(false); this.blockUntil = performance.now() + 300; } return; }
-    if (edge(9) && !ENDUI.open) h.openPanel(true);                                             // Start / Menu / Options: ajustes
+    if (edge(9)) { if (ENDUI.open) h.exit(); else h.openPanel(true); }                             // Start / Menu / Options: ajustes (o salir al menu en la pantalla final)
   },
   start: function () {
     const me = this;
@@ -291,6 +299,8 @@ const PADUI = {
         const cur = [];
         for (let i = 0; i < 17; i++) cur[i] = !!(gp.buttons[i] && gp.buttons[i].pressed);
         if (cur.some(Boolean) || Math.abs(gp.axes[0] || 0) > 0.5 || Math.abs(gp.axes[1] || 0) > 0.5) me.set(true);
+        const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
+        cur[100] = ay < -0.55; cur[101] = ay > 0.55; cur[102] = ax < -0.55; cur[103] = ax > 0.55;   // stick como direcciones de menu
         me.handle(function (i) { return cur[i] && !me.prev[i]; });
         me.prev = cur;
       } else me.prev = [];
@@ -299,6 +309,29 @@ const PADUI = {
     tick();
   }
 };
+
+// ---- Niveles, progreso guardado y avisos en pantalla ----
+const LEVELS = [
+  { id: 'tutorial', name: 'Tutorial', desc: 'Pull the plugs, swim the flooded tunnel and get past the crab.', ready: true },
+  { id: 'level2', name: 'Level 2', desc: 'New tunnels and new puzzles.', ready: false },
+  { id: 'level3', name: 'Level 3', desc: 'The flooded depths.', ready: false }
+];
+let CURRENT_LEVEL = LEVELS[0];
+function loadProgress() { try { return JSON.parse(localStorage.getItem('tidewater_progress') || '{}'); } catch (e) { return {}; } }
+function saveProgress(id, st) {
+  try {
+    const p = loadProgress(), o = p[id] || {};
+    p[id] = { done: true, best: o.best ? Math.min(o.best, st.time) : st.time, deaths: o.deaths === undefined ? st.deaths : Math.min(o.deaths, st.deaths), gem: !!(o.gem || st.gem) };
+    localStorage.setItem('tidewater_progress', JSON.stringify(p));
+  } catch (e) { /* sin storage */ }
+}
+function fmtTime(s) { return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
+let toastTimer = null;
+function showToast(txt) {
+  const el = document.getElementById('toast'); if (!el) return;
+  el.textContent = txt; el.classList.add('show'); clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { el.classList.remove('show'); }, 2200);
+}
 
 // ---- Pantalla final con la pregunta de justicia ----
 const ENDUI = { open: false, sel: 0, rated: false };
@@ -620,6 +653,7 @@ class Level extends Phaser.Scene {
     const d = this.dripG; d.clear();
     this.drips.forEach(function (dr) {
       const ph = ((time + dr.off) % dr.per) / dr.per, sy = this.surfAt(dr.x), fall = 0.45;
+      if (ph >= fall && !dr.snd) { dr.snd = true; SFX.drip(Phaser.Math.Clamp(1 - Math.abs(this.player.x - dr.x) / 650, 0, 1)); } else if (ph < fall) dr.snd = false;   // gota que cae: suena segun la distancia
       if (ph < fall) { const t = ph / fall, y = sy * t * t; d.fillStyle(0xbfe0f2, 0.7); d.fillEllipse(dr.x, y, 2.4, 5); }
       else if (ph < fall + 0.25) { const t = (ph - fall) / 0.25; d.lineStyle(1.2, 0xdff1ff, 0.55 * (1 - t)); d.strokeEllipse(dr.x, sy + 1, 6 + t * 26, 2 + t * 5); }
     }, this);
@@ -981,6 +1015,7 @@ class Level extends Phaser.Scene {
         this.warnG.fillStyle(o.st.color, 0.16 + 0.32 * pulse * (close ? 1 : 0.6));
         this.warnG.fillRect(o.x + 2, tipY, o.w - 4, bot - tipY);   // la zona donde la cabeza chocaria
         if (on) drawSpikes(this.warnG, o.x, o.yb, o.w, 1, { color: 0xffffff, shape: o.st.shape }, close ? 0.85 : 0.5);
+        if (close) this.alertT = time + 400;
         if (close && !o.warned) { o.warned = true; SFX.warn(); }
       }, this);
     }
@@ -1026,7 +1061,7 @@ class Level extends Phaser.Scene {
     if (this.climb || pLvl < SWIM_EXIT) this.swimSticky = false;              // si el agua baja de SWIM_EXIT deja de nadar y camina
     const floating = !this.climb && ((pLvl >= SWIM_ENTER && b.bottom >= surf - 6) || (pLvl >= SWIM_EXIT && !!this.swimSticky));   // empieza a nadar con SWIM_ENTER; con menos agua solo camina
     if (floating) this.swimSticky = true;
-    if (floating && !this.wasFloat) SFX.splash();
+    if (floating && !this.wasFloat) { SFX.splash(); this.burst(this.player.x, surf, 0xdff1ff, 10, 70, -34); this.burst(this.player.x, surf, 0x9ad0ff, 4, 40, -18); }   // chapuzon
     this.wasFloat = floating;
     b.setAllowGravity(!floating); this.floatingNow = floating; this.floatSec = zn;
     if (floating) {
@@ -1066,12 +1101,16 @@ class Level extends Phaser.Scene {
 
     // Reaccion a los controles: polvo al correr, aterrizaje, estela en el agua, saltito al flotar
     const grounded = b.blocked.down;
-    if (grounded && !this.wasGrounded && this.lastVy > 220) { SFX.land(); this.squash = 1; this.burst(this.player.x, this.player.y + PH / 2, 0xcdd9e3, 6, 44, -8); }
+    if (grounded && !this.wasGrounded && this.lastVy > 220) { SFX.land(); this.squash = 1; this.burst(this.player.x, this.player.y + PH / 2, 0xcdd9e3, this.lastVy > 420 ? 12 : 6, this.lastVy > 420 ? 64 : 44, -8); }   // mas polvo en caidas largas
     this.wasGrounded = grounded; this.lastVy = b.velocity.y;
     if (dir && time - this.lastDust > 150 && (grounded || floating)) {
       this.lastDust = time;
       if (floating) { this.burst(this.player.x - dir * 10, surf, 0xdff1ff, 2, 22, -8); SFX.stroke(); }
       else this.burst(this.player.x - dir * 8, this.player.y + PH / 2, 0xb8c4d0, 1, 14, -6);
+    }
+    if (dir && grounded && !floating && time - (this.lastStep || 0) > 270) {   // pasos: secos en el piso, chapoteo si hay agua
+      this.lastStep = time; const wetFt = this.lvlAt(this.player.x) > 0.02;
+      SFX.step(wetFt); if (wetFt) this.burst(this.player.x, surf, 0xdff1ff, 2, 18, -8);
     }
     if (floating && this.buffer > 0) { this.bounce = 1; this.buffer = 0; this.burst(this.player.x, surf, 0xdff1ff, 5, 36, -20); }
 
@@ -1108,7 +1147,17 @@ class Level extends Phaser.Scene {
 
     // Peligros
     const pb = this.damageBox();
-    if (this.lamp) { const c = this.cameras.main; this.lamp.setPosition(this.player.x - c.scrollX, this.player.y - c.scrollY - 20); }
+    if (this.lamp) {
+      const c = this.cameras.main; this.lamp.setPosition(this.player.x - c.scrollX, this.player.y - c.scrollY - 20);
+      // la luz titila: temblor leve siempre, y rafagas; mas seguidas con agua alta y mucho mas con un aviso (pelicano o pinchos de techo)
+      if (this.flNext === undefined) { this.flNext = time + 4000; this.flUntil = 0; }
+      const alert = time < (this.alertT || 0), hiW = this.lvlAt(this.player.x) > 0.85;
+      if (time > this.flNext) { this.flUntil = time + 160 + Math.random() * 240; this.flNext = time + (alert ? 700 : hiW ? 3500 : 8000) * (0.6 + Math.random() * 0.8); SFX.zap(); }
+      let f = 0.012 * Math.sin(time / 130) * Math.sin(time / 71);
+      if (time < this.flUntil) f += (Math.sin(time / 21) > 0 ? 0.2 : 0.05) * (alert ? 1.3 : 1);
+      this.lamp.setDisplaySize(2300 * (1 - f), 2300 * (1 - f));
+    }
+    if (this.hp === 1) { this.drawHp(time); if (time - (this.lastBeat || 0) > 950) { this.lastBeat = time; SFX.beat(); } }   // vida baja: la barra late
     if (this.updateEnemies(dt, pb, sec, time)) return;
     for (let i = 0; i < this.hazards.length; i++) {
       if (Phaser.Geom.Intersects.RectangleToRectangle(pb, this.hazards[i].r)) { this.die(this.hazards[i].kind + '_spikes', sec); return; }
@@ -1127,7 +1176,11 @@ class Level extends Phaser.Scene {
     }
 
     // Puntos de control y meta
-    for (let s = 0; s < NSEC; s++) if (this.player.x > this.flagX[s] && s > this.checkpoint) { this.checkpoint = s; SFX.flag(); if (this.hp < HP_MAX) { this.hp = HP_MAX; this.drawHp(); } }
+    for (let s = 0; s < NSEC; s++) if (this.player.x > this.flagX[s] && s > this.checkpoint) {
+      this.checkpoint = s; SFX.flag(); const healed = this.hp < HP_MAX;
+      if (healed) { this.hp = HP_MAX; this.drawHp(); }
+      showToast(healed ? 'Checkpoint \u00B7 Health restored' : 'Checkpoint'); this.burst(this.player.x, this.player.y, 0xffd166, 10, 70, -40);
+    }
     this.eyes.setPosition(this.player.x + this.facing * 5, this.player.y - 6);
     if (this.player.x > this.goalX) this.finish();
   }
@@ -1162,6 +1215,7 @@ class Level extends Phaser.Scene {
   heroFrame(time, b, grounded, spd) {
     if (this.dead) return 'dead';
     if (this.done) return 'done' + (Math.floor(time / 260) % 2);
+    if (time < (this.hurtPose || 0) && !this.climb) return 'jump2';                 // golpeado: pose abierta unos instantes
     const pu = (time - this.pullAt) / PULL_T;
     if (this.pullPlug && pu >= 0 && pu < 1) {
       if (this.pullPlug.mode === 'buoy' && this.pullSwim) return 'sw' + SWIM_REACH;   // nadando: se queda con el brazo estirado y jala la boya
@@ -1218,12 +1272,13 @@ class Level extends Phaser.Scene {
     if (m.tread) sy = Math.min(sy, GY);   // poca agua: los pies se quedan sobre el piso (antes se recortaba el dibujo y parecia hundirse)
     const blink = !this.dead && time < this.hurtUntil && Math.floor(time / 90) % 2 === 0 ? 0.35 : 1;   // parpadea mientras es invulnerable
     this.spr.setAlpha(blink); this.sprW.setAlpha(blink);
-    this.spr.setPosition(p.x, sy).setTint(this.dead ? 0xffb0b0 : 0xffffff);
+    const tc = (this.dead || time < (this.hurtFlash || 0)) ? 0xff8a8a : 0xffffff;   // destello rojo al recibir golpe
+    this.spr.setPosition(p.x, sy).setTint(tc);
     if (m.tread) {   // flotando quieto: dibujo seco sobre la superficie del agua y dibujo mojado (tinte de agua) debajo; el corte sigue la ola real
       const row = Math.max(0, Math.min(m.h, m.h - (sy - sfc) / K)), W = this.sprW;
       this.spr.setVisible(row > 0.5); if (row > 0.5) this.spr.setCrop(0, 0, m.w, row);
       W.setVisible(row < m.h - 0.5);
-      if (row < m.h - 0.5) W.setTexture('h_' + name + 'w').setFlipX(f < 0).setOrigin(this.spr.originX, 1).setScale(K).setPosition(p.x, sy).setTint(this.dead ? 0xffb0b0 : 0xffffff).setCrop(0, row, m.w, m.h - row);
+      if (row < m.h - 0.5) W.setTexture('h_' + name + 'w').setFlipX(f < 0).setOrigin(this.spr.originX, 1).setScale(K).setPosition(p.x, sy).setTint(tc).setCrop(0, row, m.w, m.h - row);
     } else { this.spr.setVisible(true); if (this.spr.isCropped) this.spr.setCrop(); this.sprW.setVisible(false); }
     this.handPos = null;
     if (m.hand && this.pullPlug && !this.dead && pu0(this, time) >= 0 && pu0(this, time) < 1) {
@@ -1376,6 +1431,7 @@ class Level extends Phaser.Scene {
         if (hit(e.x, GY - 15 - e.lift, 64, 30) && this.hurt('crab', sec, time, e.x)) return true;   // la caja de dano sigue al cuerpo (si salta nadando, sube con el)
       } else {   // pelicano: vuela alto; si el agua esta alta avisa, se lanza en picada, se queda un instante y sube
         const yFly = GY - HIGH_H - 90, yS = this.surfAt(e.x) + 4; e.tm -= dt;
+        if (e.st === 'warn') this.alertT = time + 400;   // el pelicano avisa: la luz se agita
         if (e.st === 'fly') { patrolR(e); e.y = yFly + Math.sin(time / 300 + e.x0) * 5; if (e.tm <= 0) { if (hi > 0.85 && Math.random() < 0.7 && Math.abs(e.x - (e.lastDive === undefined ? -1e9 : e.lastDive)) > 45) { e.st = 'warn'; e.tm = 0.7 + Math.random() * 0.3; e.lastDive = e.x; } else e.tm = 0.4 + Math.random() * 1.4; } }
         else if (e.st === 'warn') { e.y = yFly + Math.sin(time / 60) * 3; if (e.tm <= 0) { e.st = 'dive'; e.tm = 0.3; } }
         else if (e.st === 'dive') { const p = 1 - Math.max(0, e.tm) / 0.3; e.y = yFly + (yS - yFly) * p * p; if (e.tm <= 0) { e.st = 'stay'; e.tm = 0.35; SFX.splash(); this.burst(e.x, yS, 0x9ad0ff, 8, 60, -60); } }
@@ -1452,12 +1508,14 @@ class Level extends Phaser.Scene {
     const db = this.damageBox(); D.lineStyle(1.5, 0xffe14a, 1); D.strokeRect(db.x, db.y, db.width, db.height);
   }
 
-  drawHp() {
+  drawHp(t) {
     const g = this.hpG; g.clear();
+    const lo = this.hp === 1; if (lo !== this.lowF) { this.lowF = lo; document.body.classList.toggle('lowhp', lo); }   // vineta roja que late con 1 mitad
+    const pul = lo && t ? 0.55 + 0.45 * Math.sin(t / 140) : 1;
     g.fillStyle(0x06121a, 0.6); g.fillRoundedRect(10, 44, 168, 16, 8);
     for (let i = 0; i < HP_MAX; i++) {
-      g.fillStyle(i < this.hp ? 0xe63946 : 0x3a1c22, 1); g.fillRoundedRect(15 + i * 81, 48, 77, 8, 4);
-      if (i < this.hp) { g.fillStyle(0xff8a93, 0.5); g.fillRect(19 + i * 81, 49, 69, 2); }
+      g.fillStyle(i < this.hp ? 0xe63946 : 0x3a1c22, i < this.hp ? pul : 1); g.fillRoundedRect(15 + i * 81, 48, 77, 8, 4);
+      if (i < this.hp) { g.fillStyle(0xff8a93, 0.5 * pul); g.fillRect(19 + i * 81, 49, 69, 2); }
     }
   }
 
@@ -1468,9 +1526,9 @@ class Level extends Phaser.Scene {
     if (this.hp <= 0) { this.die(cause, sec); return true; }
     this.hurtUntil = time + HURT_MS;
     const away = this.player.x >= fromX ? 1 : -1;
-    this.knockUntil = time + 220; this.knockV = away * 260;
+    this.knockUntil = time + 220; this.knockV = away * 260; this.hurtFlash = time + 240; this.hurtPose = time + 280;
     this.player.body.setVelocityY(-230);
-    this.cameras.main.shake(120, 0.004); rumble(120, 0.4); SFX.die();
+    this.cameras.main.shake(120, 0.004); rumble(120, 0.4); SFX.hurt();
     this.burst(this.player.x, this.player.y, 0xe63946, 6, 40, -14);
     log('hurt', { cause: cause, section: sec + 1, hp: this.hp });
     return false;
@@ -1502,14 +1560,14 @@ class Level extends Phaser.Scene {
     this.player.setFillStyle(0xe9ecef); this.eyes.setVisible(true);
     this.player.body.reset(this.flagX[this.checkpoint] + 40 - PW / 2, GY - PH - 2);
     this.dead = false; this.swimSticky = false;
-    this.hp = HP_MAX; this.hurtUntil = 0; this.knockUntil = 0; this.drawHp();
+    this.hp = HP_MAX; this.hurtUntil = 0; this.knockUntil = 0; this.hurtPose = 0; this.hurtFlash = 0; this.drawHp();
   }
 
   finish() {
     this.done = true;
     this.player.body.setVelocity(0, 0); this.player.body.setAllowGravity(false);
     const stats = { time: Math.round((this.time.now - this.startTime) / 1000), deaths: this.deaths, gem: this.gem, coins: this.coinCount };
-    SFX.win(); log('goal', stats);
+    SFX.win(); log('goal', stats); saveProgress(CURRENT_LEVEL.id, stats); document.body.classList.remove('lowhp');
     showEnd(stats, function () { this.scene.restart(); }.bind(this));
   }
 }
@@ -1532,26 +1590,136 @@ function setPaused(p) {   // pausa el nivel mientras estan abiertos los ajustes
 }
 function bindMenu() {
   const $ = function (id) { return document.getElementById(id); };
-  const title = $('title'), panel = $('panel'), mus = $('vol-music'), sfx = $('vol-sfx'), mt = $('mute-opt');
+  const title = $('title'), levels = $('levels'), panel = $('panel'), mus = $('vol-music'), sfx = $('vol-sfx'), mt = $('mute-opt'), ht = $('hit-opt');
   mus.value = Math.round(SFX.musicVol() * 100); sfx.value = Math.round(SFX.sfxVol() * 100); mt.checked = SFX.isMuted();
-  const ht = $('hit-opt'); ht.checked = SHOW_HIT; ht.addEventListener('change', function () { setHit(ht.checked); });
+  ht.checked = SHOW_HIT; ht.addEventListener('change', function () { setHit(ht.checked); });
   mus.addEventListener('input', function () { SFX.unlock(); SFX.setMusicVol(mus.value / 100); });
   sfx.addEventListener('input', function () { SFX.unlock(); SFX.setSfxVol(sfx.value / 100); });
   mt.addEventListener('change', function () { if (mt.checked !== SFX.isMuted()) SFX.toggle(); });
   const prevToggle = SFX.onToggle; SFX.onToggle = function () { if (prevToggle) prevToggle(); mt.checked = SFX.isMuted(); };
-  function openPanel(o) { panel.style.display = o ? 'flex' : 'none'; setPaused(o); if (o) SFX.ui(); }
-  $('cfg').addEventListener('click', function (e) { openPanel(panel.style.display !== 'flex'); e.currentTarget.blur(); });
+
+  // burbujas que suben en el titulo
+  const bubs = $('bubs');
+  for (let n = 0; n < 18; n++) {
+    const b = document.createElement('i'), sz = 4 + Math.random() * 12;
+    b.style.cssText = 'left:' + (Math.random() * 100) + '%;width:' + sz + 'px;height:' + sz + 'px;animation-duration:' + (9 + Math.random() * 12) + 's;animation-delay:-' + (Math.random() * 20) + 's';
+    bubs.appendChild(b);
+  }
+
+  // ---- navegacion de menus (teclado, mouse y control comparten la misma seleccion) ----
+  let screen = 'title', panelOpen = false, lastCard = 0;
+  const sel = { title: 0, levels: 0, panel: 0 };
+  const visible = function (el) { return el.offsetParent !== null || el.getClientRects().length > 0; };
+  const lists = {
+    title: function () { return [$('play'), $('title-cfg')]; },
+    levels: function () { return Array.prototype.slice.call(document.querySelectorAll('#cards .card')).concat([$('lv-back')]); },
+    panel: function () { return [mus, sfx, mt, ht, $('panel-menu'), $('panel-close')].filter(visible); }
+  };
+  const cur = function () { return panelOpen ? 'panel' : screen; };
+  function paintSel() {
+    Array.prototype.forEach.call(document.querySelectorAll('.msel'), function (e) { e.classList.remove('msel'); });
+    const k = cur(); if (k === 'game') return;
+    const el = lists[k]()[sel[k]]; if (!el) return;
+    (el.tagName === 'INPUT' ? el.closest('label') || el : el).classList.add('msel');
+  }
+  function nav(dx, dy) {
+    const k = cur(); if (k === 'game') return;
+    const l = lists[k](); let i = sel[k];
+    if (k === 'panel') {
+      const el = l[i];
+      if (dy) i = Phaser.Math.Clamp(i + dy, 0, l.length - 1);
+      else if (dx && el.type === 'range') { el.value = Math.max(0, Math.min(100, Number(el.value) + dx * 10)); el.dispatchEvent(new Event('input')); }
+      else if (dx && el.type === 'checkbox') { el.checked = !el.checked; el.dispatchEvent(new Event('change')); }
+    } else if (k === 'levels') {
+      const n = l.length;
+      if (dx) i = Phaser.Math.Clamp(i + dx, 0, n - 1);
+      else if (dy > 0) i = n - 1;
+      else if (dy < 0 && i === n - 1) i = lastCard;
+      if (i < n - 1) lastCard = i;
+    } else i = Phaser.Math.Clamp(i + (dy || dx), 0, l.length - 1);
+    if (i !== sel[k]) SFX.ui();
+    sel[k] = i; paintSel();
+  }
+  function ok() {
+    const k = cur(); if (k === 'game') return;
+    const el = lists[k]()[sel[k]]; if (!el) return;
+    if (el.type === 'checkbox') { el.checked = !el.checked; el.dispatchEvent(new Event('change')); }
+    else if (el.type !== 'range') el.click();
+  }
+  function setScreen(sc) {
+    screen = sc;
+    title.style.display = sc === 'title' ? 'flex' : 'none'; levels.style.display = sc === 'levels' ? 'flex' : 'none';
+    document.body.classList.toggle('ingame', sc === 'game');
+    if (sc === 'levels') renderCards();
+    paintSel();
+  }
+  function openPanel(o) {
+    panelOpen = o; panel.style.display = o ? 'flex' : 'none';
+    $('panel-menu').style.display = screen === 'game' ? '' : 'none';
+    setPaused(o); if (o) { sel.panel = 0; SFX.ui(); }
+    paintSel();
+  }
+  function back() { if (panelOpen) openPanel(false); else if (screen === 'levels') { SFX.ui(); setScreen('title'); } }
+  function exitToMenu() {   // vuelve a la seleccion de nivel y destruye la partida
+    if (panelOpen) { panelOpen = false; panel.style.display = 'none'; setPaused(false); }
+    ENDUI.open = false; $('end').style.display = 'none';
+    if (GAME) { GAME.destroy(true); GAME = null; }
+    document.body.classList.remove('dead', 'lowhp'); $('toast').classList.remove('show'); $('lvltitle').classList.remove('show');
+    SFX.ambience(false, 0); setScreen('levels');
+  }
+
+  // ---- seleccion de nivel ----
+  function renderCards() {
+    const wrap = $('cards'), prog = loadProgress(); wrap.innerHTML = '';
+    LEVELS.forEach(function (lv, i) {
+      const p = prog[lv.id], el = document.createElement('button');
+      el.className = 'card' + (lv.ready ? '' : ' locked'); el.dataset.id = lv.id;
+      const meta = !lv.ready ? '\uD83D\uDD12 Coming soon' : p ? '\u2713 ' + fmtTime(p.best) + ' \u00B7 ' + p.deaths + ' fails' + (p.gem ? ' \u00B7 \u25C6' : '') : 'Not played yet';
+      el.innerHTML = '<span class="num">' + (i === 0 ? 'T' : i + 1) + '</span><h3>' + lv.name + '</h3><p>' + lv.desc + '</p><span class="meta">' + meta + '</span>';
+      el.addEventListener('click', function () { startLevel(lv.id); });
+      el.addEventListener('mouseenter', function () { sel.levels = i; lastCard = i; paintSel(); });
+      PADUI.badge(el, 'confirm'); wrap.appendChild(el);
+    });
+    PADUI.paint();
+  }
+  function startLevel(id) {
+    const lv = LEVELS.filter(function (l) { return l.id === id; })[0]; if (!lv) return;
+    if (!lv.ready) {
+      SFX.blocked(); const el = document.querySelector('.card[data-id="' + id + '"]');
+      if (el) { el.classList.remove('deny'); void el.offsetWidth; el.classList.add('deny'); }
+      return;
+    }
+    CURRENT_LEVEL = lv; setScreen('game'); SFX.unlock(); SFX.ui(); startGame();
+    const t = $('lvltitle'); t.querySelector('h2').textContent = lv.name; t.querySelector('p').textContent = lv.desc;
+    clearTimeout(t._h); t.classList.add('show'); t._h = setTimeout(function () { t.classList.remove('show'); }, 3200);
+  }
+
+  $('cfg').addEventListener('click', function (e) { openPanel(!panelOpen); e.currentTarget.blur(); });
   $('panel-close').addEventListener('click', function () { openPanel(false); });
+  $('panel-menu').addEventListener('click', exitToMenu);
+  $('end-menu').addEventListener('click', exitToMenu);
   $('title-cfg').addEventListener('click', function () { openPanel(true); });
-  function play() { if (title.style.display === 'none') return; title.style.display = 'none'; SFX.unlock(); SFX.ui(); startGame(); }
-  $('play').addEventListener('click', play);
-  PADUI.hooks = { play: play, openPanel: openPanel, panelOpen: function () { return panel.style.display === 'flex'; }, onTitle: function () { return title.style.display !== 'none'; } };
-  PADUI.badge($('cfg'), 'menu'); PADUI.badge($('mute'), 'view'); PADUI.badge($('play'), 'confirm'); PADUI.badge($('title-cfg'), 'pull');
-  PADUI.badge($('panel-close'), 'back'); PADUI.badge($('again'), 'confirm');
-  PADUI.paint(); PADUI.start();
+  $('play').addEventListener('click', function () { SFX.unlock(); SFX.ui(); setScreen('levels'); });
+  $('lv-back').addEventListener('click', back);
+  [$('play'), $('title-cfg')].forEach(function (el, i) { el.addEventListener('mouseenter', function () { sel.title = i; paintSel(); }); });
+  [mus, sfx, mt, ht, $('panel-menu'), $('panel-close')].forEach(function (el) { el.addEventListener('mouseenter', function () { const l = lists.panel(), i = l.indexOf(el); if (i >= 0) { sel.panel = i; paintSel(); } }); });
+
   window.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && title.style.display === 'none') { openPanel(panel.style.display !== 'flex'); return; }
-    if (title.style.display !== 'none' && panel.style.display !== 'flex' && e.key !== 'Escape') play();
+    const k = e.key;
+    if (k === 'Escape') {
+      if (panelOpen) openPanel(false); else if (screen === 'levels') back(); else if (screen === 'game') openPanel(true);
+      e.preventDefault(); return;
+    }
+    if (screen === 'game' && !panelOpen) return;
+    const dirs = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+    if (dirs[k]) { e.preventDefault(); nav(dirs[k][0], dirs[k][1]); return; }
+    if (k === 'Enter' || k === ' ') { e.preventDefault(); if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); SFX.unlock(); ok(); return; }
+    if (screen === 'title' && !panelOpen && k.length === 1) { SFX.unlock(); SFX.ui(); setScreen('levels'); }   // cualquier tecla en el titulo: a los niveles
   });
+
+  PADUI.hooks = { nav: nav, ok: ok, back: back, openPanel: openPanel, exit: exitToMenu, state: function () { return { screen: screen, panel: panelOpen }; } };
+  PADUI.badge($('cfg'), 'menu'); PADUI.badge($('mute'), 'view'); PADUI.badge($('play'), 'confirm'); PADUI.badge($('title-cfg'), 'pull');
+  PADUI.badge($('lv-back'), 'back'); PADUI.badge($('panel-close'), 'back'); PADUI.badge($('again'), 'confirm'); PADUI.badge($('end-menu'), 'menu');
+  PADUI.paint(); PADUI.start(); setScreen('title');
 }
 bindMenu();
