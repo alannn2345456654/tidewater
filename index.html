@@ -134,17 +134,11 @@
     var s = document.createElement('script'); s.defer = true; s.src = '/_vercel/speed-insights/script.js'; document.head.appendChild(s);
   }
 </script>
-<!-- Vercel Web Analytics: served from our own path (/stats) so blockers match it less; only loaded when hosted -->
+<!-- Vercel Web Analytics (official path) -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-  if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) && location.protocol !== 'file:') {
-    var a = document.createElement('script');
-    a.defer = true;
-    a.src = '/stats/script.js';
-    a.setAttribute('data-endpoint', '/stats');
-    document.head.appendChild(a);
-  }
 </script>
+<script defer src="/_vercel/insights/script.js"></script>
 <script src="vendor/phaser.min.js"></script>
 <script src="sprites.js"></script>
 <script src="water.js"></script>
