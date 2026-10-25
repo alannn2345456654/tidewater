@@ -134,13 +134,6 @@
     var s = document.createElement('script'); s.defer = true; s.src = '/_vercel/speed-insights/script.js'; document.head.appendChild(s);
   }
 </script>
-<<<<<<< HEAD
-<!-- Vercel Web Analytics: only loaded when hosted -->
-<script>
-  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-  if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) && location.protocol !== 'file:') {
-    var a = document.createElement('script'); a.defer = true; a.src = '/_vercel/insights/script.js'; document.head.appendChild(a);
-=======
 <!-- Vercel Web Analytics: served from our own path (/stats) so blockers match it less; only loaded when hosted -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
@@ -150,7 +143,6 @@
     a.src = '/stats/script.js';
     a.setAttribute('data-endpoint', '/stats');
     document.head.appendChild(a);
->>>>>>> ffdcfd4 (Add Vercel Web Analytics via first-party path)
   }
 </script>
 <script src="vendor/phaser.min.js"></script>
