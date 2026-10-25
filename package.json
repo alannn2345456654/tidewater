@@ -1,0 +1,25 @@
+{
+  "name": "primary",
+  "version": "1.0.0",
+  "description": "Level 1 of a 2D platformer made with Phaser 3. The player pulls plugs to raise or lower the water, and uses the water to get past walls, pits and spikes.",
+  "main": "game.js",
+  "scripts": {
+    "dev": "npx serve .",
+    "start": "npx serve .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alannn2345456654/tidewater.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/alannn2345456654/tidewater/issues"
+  },
+  "homepage": "https://github.com/alannn2345456654/tidewater#readme",
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
+  }
+}
