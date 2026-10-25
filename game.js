@@ -6,32 +6,42 @@
 const SUPABASE_URL = '';       // ej. https://xxxx.supabase.co
 const SUPABASE_ANON_KEY = '';  // clave anon (publica, con RLS solo-insert)
 
-// ---- Constantes del nivel ----
+// =====================================================================
+// CONSTANTES (editar aqui). El mapa del nivel esta en level.js
+// =====================================================================
+// ---- Fisica y sensacion de juego ----
+const GRAVITY = 1200;        // gravedad (px/s^2): mas alto = caida mas rapida
+const SPEED = 170;           // velocidad al caminar/nadar (px/s)
+const JUMP_V = -385;         // fuerza de salto (px/s, negativo = hacia arriba)
+const COYOTE_S = 0.09;       // margen para saltar justo despues de dejar un borde (s)
+const BUFFER_S = 0.12;       // margen si se pulsa salto un poco antes de tocar el suelo (s)
+const PLUG_LOCK = 900;       // ms de espera tras jalar un tapon
+const HP_MAX = 2, HURT_MS = 1500;   // vida en mitades; ms de invulnerabilidad tras un golpe del cangrejo
+
+// ---- Tamanos y agua ----
 const T = 40, W = 960, H = 540, GY = 440;         // tile, vista, y del suelo
-const SC = 18, NSEC = 3, LW = SC * NSEC * T;      // columnas por seccion, ancho total
+const SC = LEVEL.secCols, NSEC = LEVEL.sections, LW = SC * NSEC * T;   // columnas por seccion, secciones, ancho total
 const HIGH_H = 3 * T, LOW_H = 3;                 // altura del agua alta / baja
 const WALL_H = HIGH_H + 36;                       // las torres sobresalen 36 px del agua alta: el agua nunca las rebasa
 const CLIMB_MAX = 50;                             // el saltito de trepar solo funciona si la cima esta a <= 50 px sobre la superficie
-const PW = 28, PH = 36, SPEED = 170, JUMP_V = -385;
+const PW = 28, PH = 36;                           // tamano del cuerpo fisico del jugador
 const SPIKE_H = 26;
-const PLUG_LOCK = 900;                            // ms de espera tras jalar un tapon
 const CLOSE_MAX_H = 22;                           // un desague abierto solo se tapa si el agua sobre el esta a <= 22 px (no con el agua corriendo)
-const START_HIGH = [false, false, true];          // la seccion 3 empieza inundada
-
-const PITS = [{ s: 1, a: 4, b: 8 }, { s: 2, a: 9, b: 12 }];        // pozos con pinchos
-const CEIL_SPIKES = [{ s: 2, a: 4, b: 6 }, { s: 2, a: 15, b: 17 }]; // pinchos de techo
-const CEIL_SOLIDS = [{ s: 2, a: 4, b: 6 }, { s: 2, a: 15, b: 17 }];
-const ENEMIES = [{ t: 'crab', s: 0, a: 10, b: 14, v: 55 }, { t: 'pelican', s: 1, a: 14, b: 17, v: 75 }];   // cangrejo (suelo) y pelicano (vuela alto y se lanza al agua de vez en cuando)
-const SHARK_ON = false;   // tiburon apagado por ahora (se activa poniendo true)
-const SHARK_DEN = { s: 2, c: 7 };   // hueco del tiburon en el suelo de S3: solo sale si estas nadando cerca
 const SWIM_ENTER = 0.35, SWIM_EXIT = 0.25;   // nivel minimo del agua (0-1, 1 = agua alta) para empezar a nadar y para seguir nadando mientras baja
 const TREAD_HIT_W = 1.3, TREAD_HIT_DEEP = 22;   // flotando quieto: ancho de la caja de dano (x el cuerpo) y cuanto baja bajo la superficie (px)
-const HP_MAX = 2, HURT_MS = 1500;   // vida en mitades; ms de invulnerabilidad tras un golpe del cangrejo
-const WALLS = [{ s: 0, c: 6 }, { s: 1, c: 12 }];                    // muros de 3 tiles
-const PLUG_START_CLOSED = [{ s: 1, c: 10 }];     // tapones que empiezan ya puestos (el de la derecha del pozo de la seccion 2: no hace falta cruzar el pozo saltando)
+const SHARK_ON = false;   // tiburon apagado por ahora (se activa poniendo true)
+const SHARK_DEN = { s: 2, c: 7 };   // hueco del tiburon en el suelo de S3: solo sale si estas nadando cerca
+
+// ---- Datos del nivel (vienen de level.js) ----
+const PITS = LEVEL.pits;                    // pozos con pinchos de piso
+const CEIL_SPIKES = LEVEL.ceil;             // pinchos de techo
+const CEIL_SOLIDS = LEVEL.ceil;             // bloque del que cuelgan
+const ENEMIES = LEVEL.enemies;              // cangrejo (suelo) y pelicano (vuela alto y se lanza al agua)
+const WALLS = LEVEL.walls;                  // muros de 3 tiles
+const PLUG_START_CLOSED = LEVEL.plugsClosed;   // tapones que empiezan ya puestos
+const PLUGS = LEVEL.plugs;
+const PIPES = LEVEL.pipes;
 function plugStartsOpen(p) { return !START_HIGH[p.z] && !PLUG_START_CLOSED.some(function (q) { return q.s === p.s && q.c === p.c; }); }
-const PLUGS = [{ s: 0, c: 3 }, { s: 1, c: 2 }, { s: 1, c: 10 },
-               { s: 2, c: 2 }, { s: 2, c: 8 }, { s: 2, c: 13 }];
 
 // ---- Variante del experimento: ?cues=inconsistent ----
 const params = new URLSearchParams(location.search);
@@ -45,6 +55,14 @@ function setHit(v) {
   const cb = document.getElementById('hit-opt'); if (cb) cb.checked = SHOW_HIT;
   const sc = typeof GAME !== 'undefined' && GAME && GAME.scene.scenes[0];
   if (!SHOW_HIT && sc && sc.dbgG) sc.dbgG.clear();
+}
+// ---- Cronometro opcional: casilla en Ajustes (se recuerda en localStorage). Apagado por defecto ----
+let SHOW_TIMER = false;
+try { if (localStorage.getItem('tw_timer') === '1') SHOW_TIMER = true; } catch (e) {}
+function setTimerOpt(v) {
+  SHOW_TIMER = !!v;
+  try { localStorage.setItem('tw_timer', SHOW_TIMER ? '1' : '0'); } catch (e) {}
+  const cb = document.getElementById('timer-opt'); if (cb) cb.checked = SHOW_TIMER;
 }
 const SID = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 const PALETTE = [0xe63946, 0xf4a261, 0x9b5de5, 0x2a9d8f, 0x8d99ae];
@@ -730,8 +748,8 @@ class Level extends Phaser.Scene {
       drawSpikes(spikeG, x, GY + T, w, -1, st);
       this.hazards.push({ r: new Phaser.Geom.Rectangle(x + 4, GY + T - SPIKE_H, w - 8, SPIKE_H), kind: 'floor' });
     }, this);
-    // pilar con la gema (seccion 2, columna 6)
-    addSolid(this, colx(1, 6), GY, T, T, 0x3d405b, 2.5);
+    // pilar con la gema (simbolo G de level.js)
+    addSolid(this, colx(LEVEL.gem.s, LEVEL.gem.c), GY, T, T, 0x3d405b, 2.5);
 
     // Muros de 3 tiles
     WALLS.forEach(function (wl) {
@@ -770,15 +788,14 @@ class Level extends Phaser.Scene {
     this.plugG = this.add.graphics().setDepth(3.5);
     PLUGS.forEach(function (p) {
       const cx = colx(p.s, p.c) + T / 2;
-      const hint = this.add.text(cx, GY - 45, 'E', { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff',
-        backgroundColor: '#2f80ed', padding: { x: 5, y: 2 } }).setOrigin(0.5).setDepth(6).setVisible(false);
+      const hint = this.add.circle(cx, GY - 45, 9, 0x2f80ed, 0.35).setStrokeStyle(3, 0xbfe3ff).setDepth(6).setVisible(false);   // anillo de luz (sin texto)
       this.plugObjs.push({ s: p.s, z: p.z, cx: cx, c: p.c, hint: hint, by: GY - 15, open: plugStartsOpen(p), lock: 0, lockDur: 1 });
     }, this);
 
     // Tuberias azules: siempre vierten un chorro grande (se dibuja en update)
     this.pipeX = []; this.pipeL = [];
-    for (let s = 0; s < NSEC; s++) {
-      const x = [40, colx(0, 13), colx(2, 10)][s], pg = this.add.graphics().setDepth(1);
+    for (let s = 0; s < PIPES.length; s++) {
+      const x = colx(PIPES[s].s, PIPES[s].c), pg = this.add.graphics().setDepth(1);
       this.pipeX.push(x + 91); this.pipeL.push(x);
       pg.fillStyle(0x1f5fbf, 1); pg.fillRect(x + 3, 0, 24, 44);          // tubo de suministro que baja del techo
       pg.fillStyle(0x2f80ed, 1); pg.fillRect(x + 5, 0, 20, 46);
@@ -799,11 +816,8 @@ class Level extends Phaser.Scene {
       const o = scene.add.circle(colx(s, c) + T / 2, y, 8, 0xffd166).setStrokeStyle(2, 0xfff3b0).setDepth(3);
       scene.coinObjs.push(o);
     };
-    [4, 5, 6, 7].forEach(function (c) { addCoin(this, 0, c, GY - HIGH_H - 20); }, this);
-    [4, 5, 6, 7, 8].forEach(function (c) { addCoin(this, 1, c, GY - HIGH_H - 20); }, this);
-    [4, 5, 6].forEach(function (c) { addCoin(this, 2, c, GY - 14); }, this);
-    [9, 10, 11, 12].forEach(function (c) { addCoin(this, 2, c, GY - HIGH_H - 20); }, this);
-    this.gemObj = this.add.rectangle(colx(1, 6) + T / 2, GY - 18, 16, 16, 0x9b5de5).setAngle(45)
+    LEVEL.coins.forEach(function (k) { addCoin(this, k.s, k.c, k.low ? GY - 14 : GY - HIGH_H - 20); }, this);   // o = altura del agua alta, c = en el piso
+    this.gemObj = this.add.rectangle(colx(LEVEL.gem.s, LEVEL.gem.c) + T / 2, GY - 18, 16, 16, 0x9b5de5).setAngle(45)
       .setStrokeStyle(2, 0xd9b8ff).setDepth(3);
 
     // Banderas: verde = inicio y puntos de control, amarilla = meta
@@ -812,9 +826,9 @@ class Level extends Phaser.Scene {
       g.fillStyle(0xdddddd, 1); g.fillRect(x, GY - 70, 4, 70);
       g.fillStyle(color, 1); g.fillTriangle(x + 4, GY - 70, x + 4, GY - 46, x + 34, GY - 58);
     };
-    this.flagX = [0, 1, 2].map(function (s) { return colx(s, 1) + 8; });
+    this.flagX = LEVEL.flags.map(function (f) { return colx(f.s, f.c) + 8; });
     this.flagX.forEach(function (x) { flag(this, x, 0x52b788); }, this);
-    this.goalX = colx(2, 18) + 12;
+    this.goalX = colx(LEVEL.goal.s, LEVEL.goal.c) + 12;
     flag(this, this.goalX, 0xffd60a);
 
     // Jugador
@@ -856,6 +870,9 @@ class Level extends Phaser.Scene {
     this.coinText = this.add.text(40, 14, '0', { fontFamily: 'Trebuchet MS, system-ui, sans-serif', fontSize: '20px', color: '#fff' }).setScrollFactor(0).setDepth(10);
     this.add.circle(104, 24, 8, 0xe63946).setScrollFactor(0).setDepth(10);
     this.deathText = this.add.text(120, 14, '0', { fontFamily: 'Trebuchet MS, system-ui, sans-serif', fontSize: '20px', color: '#fff' }).setScrollFactor(0).setDepth(10);
+
+    this.timerText = this.add.text(190, 14, '0:00.0', { fontFamily: 'Trebuchet MS, system-ui, sans-serif', fontSize: '20px', color: '#cfe8ff' }).setScrollFactor(0).setDepth(10).setVisible(false);   // cronometro (Ajustes)
+    this.finalMs = null;
 
     this.hpG = this.add.graphics().setScrollFactor(0).setDepth(10);   // barra de vida (2 mitades)
     this.drawHp();
@@ -1025,6 +1042,11 @@ class Level extends Phaser.Scene {
       SFX.ambience(this.floatingNow, Phaser.Math.Clamp(1 - pd / 450, 0, 1));
     }
 
+    this.timerText.setVisible(SHOW_TIMER);
+    if (SHOW_TIMER) {
+      const ms = this.finalMs !== null ? this.finalMs : Math.max(0, this.time.now - this.startTime), tt = Math.floor(ms / 100) / 10;
+      this.timerText.setText(Math.floor(tt / 60) + ':' + ('0' + Math.floor(tt % 60)).slice(-2) + '.' + Math.round((tt % 1) * 10));
+    }
     this.updateDecor(time);
     this.drawSkin(time);
     const PAD = this.readPad();
@@ -1091,9 +1113,9 @@ class Level extends Phaser.Scene {
 
     // Salto con tolerancia (coyote + buffer) para que el control no "se coma" pulsaciones
     const jumpDown = k.up.isDown || k.w.isDown || k.space.isDown || TOUCH.jump || PAD.jump;
-    if (jumpDown && !this.jumpWas) this.buffer = 0.12; else this.buffer -= dt;
+    if (jumpDown && !this.jumpWas) this.buffer = BUFFER_S; else this.buffer -= dt;
     this.jumpWas = jumpDown;
-    if (b.blocked.down || b.touching.down) this.coyote = 0.09; else this.coyote -= dt;
+    if (b.blocked.down || b.touching.down) this.coyote = COYOTE_S; else this.coyote -= dt;
     if (this.buffer > 0 && this.coyote > 0 && !floating) {
       b.setVelocityY(JUMP_V); this.buffer = 0; this.coyote = 0;
       this.squash = -0.6; this.burst(this.player.x, this.player.y + PH / 2, 0xcdd9e3, 4, 34, -6); SFX.jump();
@@ -1120,9 +1142,8 @@ class Level extends Phaser.Scene {
       const p = this.plugObjs[i], d = Math.abs(this.player.x - p.cx);
       p.hint.setPosition(p.cx, p.by - 84); p.hint.setVisible(d < T * 1.1);
       const wetBlock = p.open && this.W.at(p.cx) - LOW_H > CLOSE_MAX_H;   // no se puede tapar con el agua corriendo
-      const usePad = PADUI.active, key = usePad ? PADUI.glyph('pull') : 'E';   // con control muestra el boton (X / □) en vez de E
-      const lab = (time < p.lock || wetBlock) ? '...' : key, bg = lab === '...' ? '#6b7280' : (usePad ? PADUI.color('pull') : '#2f80ed');
-      if (p.hint.text !== lab || p.hint.hbg !== bg) { p.hint.setText(lab); p.hint.setBackgroundColor(bg); p.hint.hbg = bg; }
+      const locked = time < p.lock || wetBlock, col = locked ? 0x6b7280 : 0x2f80ed;   // gris = aun no se puede jalar
+      if (p.hint.hcol !== col) { p.hint.setFillStyle(col, 0.35); p.hint.hcol = col; }
       if (d < T * 1.1) near = p;
     }
     const pull = Phaser.Input.Keyboard.JustDown(k.e) || Phaser.Input.Keyboard.JustDown(k.down) ||
@@ -1179,7 +1200,7 @@ class Level extends Phaser.Scene {
     for (let s = 0; s < NSEC; s++) if (this.player.x > this.flagX[s] && s > this.checkpoint) {
       this.checkpoint = s; SFX.flag(); const healed = this.hp < HP_MAX;
       if (healed) { this.hp = HP_MAX; this.drawHp(); }
-      showToast(healed ? 'Checkpoint \u00B7 Health restored' : 'Checkpoint'); this.burst(this.player.x, this.player.y, 0xffd166, 10, 70, -40);
+      this.burst(this.player.x, this.player.y, 0xffd166, 10, 70, -40);
     }
     this.eyes.setPosition(this.player.x + this.facing * 5, this.player.y - 6);
     if (this.player.x > this.goalX) this.finish();
@@ -1564,7 +1585,7 @@ class Level extends Phaser.Scene {
   }
 
   finish() {
-    this.done = true;
+    this.done = true; this.finalMs = this.time.now - this.startTime;
     this.player.body.setVelocity(0, 0); this.player.body.setAllowGravity(false);
     const stats = { time: Math.round((this.time.now - this.startTime) / 1000), deaths: this.deaths, gem: this.gem, coins: this.coinCount };
     SFX.win(); log('goal', stats); saveProgress(CURRENT_LEVEL.id, stats); document.body.classList.remove('lowhp');
@@ -1578,7 +1599,7 @@ function startGame() {
   if (GAME) return;
   GAME = new Phaser.Game({
     type: Phaser.AUTO, parent: 'game', width: W, height: H, backgroundColor: '#0b1d2a',
-    physics: { default: 'arcade', arcade: { gravity: { y: 1200 }, debug: false } },
+    physics: { default: 'arcade', arcade: { gravity: { y: GRAVITY }, debug: false } },
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     scene: Level
   });
@@ -1590,9 +1611,10 @@ function setPaused(p) {   // pausa el nivel mientras estan abiertos los ajustes
 }
 function bindMenu() {
   const $ = function (id) { return document.getElementById(id); };
-  const title = $('title'), levels = $('levels'), panel = $('panel'), mus = $('vol-music'), sfx = $('vol-sfx'), mt = $('mute-opt'), ht = $('hit-opt');
+  const title = $('title'), levels = $('levels'), panel = $('panel'), mus = $('vol-music'), sfx = $('vol-sfx'), mt = $('mute-opt'), ht = $('hit-opt'), tmr = $('timer-opt');
   mus.value = Math.round(SFX.musicVol() * 100); sfx.value = Math.round(SFX.sfxVol() * 100); mt.checked = SFX.isMuted();
   ht.checked = SHOW_HIT; ht.addEventListener('change', function () { setHit(ht.checked); });
+  tmr.checked = SHOW_TIMER; tmr.addEventListener('change', function () { setTimerOpt(tmr.checked); });
   mus.addEventListener('input', function () { SFX.unlock(); SFX.setMusicVol(mus.value / 100); });
   sfx.addEventListener('input', function () { SFX.unlock(); SFX.setSfxVol(sfx.value / 100); });
   mt.addEventListener('change', function () { if (mt.checked !== SFX.isMuted()) SFX.toggle(); });
@@ -1613,7 +1635,7 @@ function bindMenu() {
   const lists = {
     title: function () { return [$('play'), $('title-cfg')]; },
     levels: function () { return Array.prototype.slice.call(document.querySelectorAll('#cards .card')).concat([$('lv-back')]); },
-    panel: function () { return [mus, sfx, mt, ht, $('panel-menu'), $('panel-close')].filter(visible); }
+    panel: function () { return [mus, sfx, mt, ht, tmr, $('panel-menu'), $('panel-close')].filter(visible); }
   };
   const cur = function () { return panelOpen ? 'panel' : screen; };
   function paintSel() {
@@ -1690,8 +1712,6 @@ function bindMenu() {
       return;
     }
     CURRENT_LEVEL = lv; setScreen('game'); SFX.unlock(); SFX.ui(); startGame();
-    const t = $('lvltitle'); t.querySelector('h2').textContent = lv.name; t.querySelector('p').textContent = lv.desc;
-    clearTimeout(t._h); t.classList.add('show'); t._h = setTimeout(function () { t.classList.remove('show'); }, 3200);
   }
 
   $('cfg').addEventListener('click', function (e) { openPanel(!panelOpen); e.currentTarget.blur(); });
@@ -1702,7 +1722,7 @@ function bindMenu() {
   $('play').addEventListener('click', function () { SFX.unlock(); SFX.ui(); setScreen('levels'); });
   $('lv-back').addEventListener('click', back);
   [$('play'), $('title-cfg')].forEach(function (el, i) { el.addEventListener('mouseenter', function () { sel.title = i; paintSel(); }); });
-  [mus, sfx, mt, ht, $('panel-menu'), $('panel-close')].forEach(function (el) { el.addEventListener('mouseenter', function () { const l = lists.panel(), i = l.indexOf(el); if (i >= 0) { sel.panel = i; paintSel(); } }); });
+  [mus, sfx, mt, ht, tmr, $('panel-menu'), $('panel-close')].forEach(function (el) { el.addEventListener('mouseenter', function () { const l = lists.panel(), i = l.indexOf(el); if (i >= 0) { sel.panel = i; paintSel(); } }); });
 
   window.addEventListener('keydown', function (e) {
     const k = e.key;
