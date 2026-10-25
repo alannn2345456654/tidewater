@@ -1,15 +1,14 @@
 'use strict';
-/* Agua con fisica (1D, aguas poco profundas): el nivel es una altura por columna de 20 px.
-   El agua fluye sola de la columna alta a la baja; las torres la frenan; las tuberias vierten
-   en su columna y cada tapon abierto es un desague en su columna. Nada esta "por zonas":
-   lo que ves en cada punto es el agua que de verdad llego (o se fue) hasta alli. */
+/* Agua en 1D: una altura por cada columna de 20 px.
+   El agua fluye de lo alto a lo bajo, los muros la frenan,
+   las tuberias la agregan y cada tapon abierto la saca. */
 const WATER = {
   CW: 20,            // ancho de columna (px)
-  G: 3000,           // "gravedad" del agua: velocidad de la ola ~ sqrt(G * altura)
-  DAMP: 0.8,         // friccion (1/s): sin ella el agua se mecería para siempre
-  SUB: 1 / 120,      // paso fijo de simulacion (s)
-  QIN: 12000,        // caudal de cada tuberia (px^2/s): zona 1 ~2.3 s, zonas 2 y 3 ~8.5 s para llenarse
-  QOUT: 60000        // caudal maximo de cada desague abierto (px^2/s)
+  G: 3000,           // gravedad del agua (velocidad de la ola)
+  DAMP: 0.8,         // friccion
+  SUB: 1 / 120,      // paso de simulacion (s)
+  QIN: 12000,        // caudal de cada tuberia (sube = se llena mas rapido)
+  QOUT: 60000        // caudal de cada desague abierto
 };
 
 function makeWater(len, low, high, solidRanges) {
@@ -19,7 +18,7 @@ function makeWater(len, low, high, solidRanges) {
   const col = function (x) { return Math.max(0, Math.min(N - 1, Math.floor(x / CW))); };
   return {
     N: N, h: h, f: f, solid: solid, low: low, high: high, CW: CW, acc: 0, col: col,
-    // altura (px sobre el piso) en x, interpolada entre columnas
+    // altura del agua en x
     at: function (x) {
       const u = x / CW - 0.5, i = Math.floor(u), t = u - i;
       const a = h[Math.max(0, Math.min(N - 1, i))], b = h[Math.max(0, Math.min(N - 1, i + 1))];
@@ -27,10 +26,10 @@ function makeWater(len, low, high, solidRanges) {
       if (sa && !sb) return b; if (sb && !sa) return a;
       return a + (b - a) * t;
     },
-    // 0 = lamina, 1 = nivel alto
+    // 0 = bajo, 1 = alto
     level: function (x) { return Math.max(0, Math.min(1, (this.at(x) - low) / (high - low))); },
     fill: function (x0, x1, lvl) { for (let i = col(x0); i <= col(x1 - 1); i++) if (!solid[i]) h[i] = low + (high - low) * lvl; },
-    // fuentes: [{x, q}], desagues abiertos: [{x, q}]
+    // fuentes y desagues: [{x, q}]
     step: function (dt, sources, sinks) {
       this.acc += dt;
       while (this.acc >= WATER.SUB) { this.acc -= WATER.SUB; this.sub(WATER.SUB, sources, sinks); }
@@ -41,7 +40,7 @@ function makeWater(len, low, high, solidRanges) {
         if (solid[i - 1] || solid[i]) { f[i] = 0; continue; }
         const hh = Math.max(h[i - 1], h[i]);
         let q = (f[i] + G * hh * (h[i - 1] - h[i]) / CW * dt) * damp;
-        const lim = q > 0 ? (h[i - 1] - low) * CW / dt * 0.5 : (h[i] - low) * CW / dt * 0.5;   // una columna no puede quedar bajo la lamina
+        const lim = q > 0 ? (h[i - 1] - low) * CW / dt * 0.5 : (h[i] - low) * CW / dt * 0.5;   // no baja del nivel minimo
         if (q > lim && q > 0) q = lim; else if (q < -lim && q < 0) q = -lim;
         f[i] = q;
       }

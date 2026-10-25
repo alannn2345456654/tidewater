@@ -1,34 +1,14 @@
 'use strict';
-/* ============================================================
-   TIDEWATER - MAPA DEL NIVEL (datos, separado de la logica)
-   Edita las filas de abajo y recarga la pagina. No hay que tocar game.js.
+/* MAPA DEL NIVEL
+   Edita las filas, guarda y recarga la pagina. No hace falta tocar game.js.
+   Son 3 secciones de 18 columnas. El '|' solo separa secciones.
 
-   El nivel mide 3 secciones x 18 columnas. En cada fila, '|' separa
-   las secciones (solo es visual: el lector lo ignora). Cada fila debe
-   tener exactamente 18 simbolos por seccion.
-
-   FILA ceil   (techo)
-     v  pinchos de techo (bloque negro + pinchos; hacen dano con agua alta)
-     T  tuberia de agua (siempre vierte agua)
-     .  nada
-   FILA air    (monedas, solo guia)
-     o  moneda a la altura del agua alta ("aqui vas a flotar")
-     c  moneda en el piso ("camina por aqui")
-     .  nada
-   FILA enemy  (zona de patrulla; la longitud de la racha = su recorrido)
-     C  cangrejo (camina por el suelo)
-     B  pelicano (vuela alto y se lanza al agua)
-     .  nada
-   FILA ground (suelo)
-     #  suelo seguro
-     ^  pozo con pinchos de piso (hacen dano con agua baja)
-     G  pilar con la gema opcional (va dentro de un pozo)
-     W  muro de 3 casillas
-     P  tapon (empieza puesto o abierto segun la zona)
-     p  tapon que empieza ya puesto
-     F  bandera verde: inicio de seccion y checkpoint
-     X  bandera amarilla: meta
-   ============================================================ */
+   ceil    v = pinchos de techo, T = tuberia
+   air     o = moneda arriba (altura del agua alta), c = moneda en el piso
+   enemy   C = cangrejo, B = pelicano (el largo de la racha es su recorrido)
+   ground  # = suelo, ^ = pozo con pinchos, G = pilar con la gema (dentro de un pozo),
+           W = muro, P = tapon, p = tapon ya puesto, F = bandera (checkpoint), X = meta
+*/
 
 const LEVEL_MAP = {
   //        SECCION 1          SECCION 2          SECCION 3
@@ -39,14 +19,13 @@ const LEVEL_MAP = {
   ground: 'F#P##W############|FP#^^G^^#p#W######|FP#####P^^^^P####X'
 };
 
-// Zonas de agua (entre muros): true = esa zona empieza con el agua alta.
-// Zona 1 = antes del primer muro, zona 2 = entre muros, zona 3 = despues del segundo muro.
+// zonas de agua (separadas por los muros). true = empieza con agua alta
 const START_HIGH = [false, false, true];
 
-// Velocidad de patrulla de cada enemigo (px/s)
+// velocidad de los enemigos (px/s)
 const ENEMY_SPEED = { crab: 55, pelican: 75 };
 
-// ---- Lector del mapa: convierte el texto en listas que usa game.js ----
+// lee el mapa y arma las listas que usa game.js
 const LEVEL = (function () {
   const rows = {};
   Object.keys(LEVEL_MAP).forEach(function (k) { rows[k] = LEVEL_MAP[k].replace(/[|\s]/g, ''); });
@@ -59,7 +38,7 @@ const LEVEL = (function () {
   const L = { sections: SECTIONS, secCols: COLS, pits: [], walls: [], plugs: [], plugsClosed: [], ceil: [], pipes: [],
               coins: [], enemies: [], flags: [], goal: null, gem: null };
 
-  // rachas de simbolos iguales (o de un grupo de simbolos) dentro de una seccion
+  // busca rachas de simbolos dentro de una seccion
   function runs(row, s, chars, fn) {
     let a = null;
     for (let c = 1; c <= COLS + 1; c++) {
