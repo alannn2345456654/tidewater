@@ -134,6 +134,13 @@
     var s = document.createElement('script'); s.defer = true; s.src = '/_vercel/speed-insights/script.js'; document.head.appendChild(s);
   }
 </script>
+<!-- Vercel Web Analytics: only loaded when hosted -->
+<script>
+  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+  if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) && location.protocol !== 'file:') {
+    var a = document.createElement('script'); a.defer = true; a.src = '/_vercel/insights/script.js'; document.head.appendChild(a);
+  }
+</script>
 <script src="vendor/phaser.min.js"></script>
 <script src="sprites.js"></script>
 <script src="water.js"></script>
