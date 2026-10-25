@@ -1,27 +1,59 @@
-# Tidewater (prototipo web)
+# Historial de cambios
 
-Nivel de 3 secciones x 18 columnas, hecho con Phaser 3 (incluido en `vendor/`). No necesita servidor ni build.
+Notas de lo que se fue agregando al juego. No es parte de las instrucciones, solo para acordarnos.
 
-## Probar en local
-    npx serve .        # o: python3 -m http.server 8000
+## Lo básico
+- El nivel tiene 3 secciones de 18 columnas. Está hecho con Phaser 3 y no necesita build.
+- Cada tapón abre o cierra su desagüe. Las tuberías siempre echan agua, pero solo suben el nivel si todos los tapones de su tramo están puestos.
+- Los muros son 36 px más altos que el agua alta, así que el agua nunca los pasa. Con agua alta se puede trepar al muro flotando junto a él.
+- El tapón de la derecha del pozo de la sección 2 empieza puesto, para no tener que saltar el pozo. Esto se cambia con la letra `p` en `level.js`.
 
-## Publicar en Vercel
-    npm i -g vercel
-    vercel --prod      # en esta carpeta; framework "Other", sin build
+## Agua (water.js)
+- El agua ya no tiene un nivel fijo. Cada columna de 20 px tiene su altura y el agua fluye de lo alto a lo bajo.
+- Se puede ajustar con `QIN` (tuberías), `QOUT` (desagües), `G` (velocidad de la ola) y `DAMP` (fricción).
+- Un desagüe abierto no se puede tapar mientras pasa mucha agua por encima (`CLOSE_MAX_H`).
+- Después de jalar un tapón hay que esperar un momento (`PLUG_LOCK`).
 
-## Variantes del experimento
-- `?cues=consistent` (por defecto): todos los peligros rojos y con la misma forma.
-- `?cues=inconsistent`: color y forma de cada peligro al azar.
+## Personaje
+- Salto: `JUMP_V` pasó de -353 a -385 para que se pueda saltar al cangrejo con más margen. No se subió más porque tiene que seguir pasando bajo los pinchos de techo.
+- Vida de 2 mitades (`HP_MAX`). El cangrejo quita media y lo demás mata. Después de un golpe hay 1.5 s sin daño (`HURT_MS`).
+- Solo nada si el agua está al 35% o más (`SWIM_ENTER`) y deja de nadar abajo del 25% (`SWIM_EXIT`).
+- Si se queda quieto en el agua, se para en el agua en vez de nadar.
+- Las cajas de daño siguen al dibujo. Se pueden ver con la tecla H.
 
-## Aviso de pinchos de techo y sonido
-- Cuando el agua de una zona con pinchos de techo esta alta (o acaba de subir), los pinchos parpadean en blanco y se enciende su zona de peligro; suena un tic al acercarse. Aplica igual en `consistent` e `inconsistent`.
-- `?warn=off`: sin el aviso (version original, util como condicion de control).
-- `?sound=off`: sin sonido. Con sonido, la tecla `M` o el boton de arriba a la derecha lo silencia (se recuerda en localStorage).
-- El sonido se genera con WebAudio (sin archivos) y arranca con la primera tecla o toque, por las reglas de autoplay del navegador.
-- `session_start` registra `warn` y `sound`.
+## Enemigos
+- Cangrejo: camina por el suelo, se asusta cuando le llega el agua y levanta las pinzas si te acercas.
+- Pelícano: vuela alto. Con agua alta avisa y se lanza en picada.
+- Tiburón: está programado pero apagado (`SHARK_ON = false`).
+- Si mueres, los enemigos vuelven a su lugar.
 
-## Registro de datos (Supabase, opcional)
-En el SQL editor de Supabase:
+## Pistas y sonido
+- Los pinchos de techo parpadean cuando el agua está alta y suena un tic al acercarse.
+- El sonido y la música se generan con WebAudio, sin archivos. Se pueden bajar o apagar en Ajustes (tecla M).
+- Al tocar una bandera se llena la vida y sale un destello.
+
+## Estilo
+- Fondo oscuro de túnel de drenaje, con luz alrededor del personaje.
+- La decoración no tiene colisión: arcos, rejillas, tuberías viejas, algas, goteras y telarañas.
+
+## Menús
+- Pantalla de título y selección de nivel. Por ahora solo está el Tutorial.
+- Ajustes con música, efectos, silencio, hitboxes y cronómetro.
+- Funciona con teclado, mouse y control (Xbox o PlayStation).
+
+## Opciones por URL (para el experimento de la Actividad 01)
+- `?cues=inconsistent`: los peligros cambian de color y forma. Sin esto, todos son rojos.
+- `?warn=off`: sin el aviso de los pinchos de techo.
+- `?look=color`: colores originales, sin el estilo oscuro.
+- `?sound=off`: sin sonido.
+- `?debug=hitboxes`: muestra las hitboxes.
+
+## Registro de datos (opcional)
+Si se llena `SUPABASE_URL` y `SUPABASE_ANON_KEY` al inicio de `game.js`, los eventos se mandan a Supabase. Si no, se guardan en `localStorage['tidewater_events']`.
+
+Eventos: `session_start`, `plug_pull`, `death`, `hurt`, `gem`, `goal` y `rating`.
+
+Tabla de Supabase:
 
     create table events (
       id bigint generated always as identity primary key,
@@ -31,105 +63,9 @@ En el SQL editor de Supabase:
     alter table events enable row level security;
     create policy "anon insert" on events for insert to anon with check (true);
 
-Luego pon `SUPABASE_URL` y `SUPABASE_ANON_KEY` al inicio de `game.js`. Eventos: `session_start`, `plug_pull`, `death`, `gem`, `goal`, `rating`.
-Sin configurar, los eventos quedan en `localStorage['tidewater_events']`.
-
-## Torres
-Las torres miden `WALL_H` (156 px), 36 px mas que el agua alta: el agua nunca las rebasa. Con el agua alta, flotando junto a una torre y empujando hacia ella (o saltando), el personaje da un saltito y trepa a la cima.
-
-## Musica y ajustes (v2)
-- Pantalla de titulo: Jugar o cualquier tecla. El juego (Phaser) se crea al empezar.
-- Musica procedural suave (WebAudio, sin archivos), volumen bajo por defecto (25%).
-- Ajustes (boton de engrane o Esc): musica, efectos y silencio. Pausa el nivel mientras estan abiertos. Se guardan en localStorage.
-
-## v3: enemigos, estilo y progreso
-- Enemigos en silueta (constante `ENEMIES` en game.js): cangrejo (suelo, S1 tras el muro), pelicano (superficie, S2 tras el muro) y tiburon (solo con agua alta, sobre el pozo B de S3). Causas de muerte en el registro: `crab`, `pelican`, `shark`.
-- Estilo melancolico tipo Limbo: desaturado, tono sepia, vineta y grano (CSS). `?look=color` vuelve a los colores originales (util como condicion de control, porque el filtro baja la saturacion de los peligros rojos).
-- Barra de progreso arriba.
-- La musica sigue siendo la procedural; si quieres una pista libre (p. ej. CC BY) puedes agregarla con un `<audio loop>` y citar al autor.
-
-## v5: estilo oscuro limpio
-- Sin grano, rayos de luz ni polvo. Solo: mas contraste y oscuridad, vineta suave y un pozo de luz alrededor del personaje. Al morir el mundo se vuelve gris un instante.
-- `?look=color` quita todo (condicion de control). `session_start` registra `look` (`tragic` o `color`).
-
-## v6: enemigos nuevos
-- Pelicano: vuela alto; con agua alta avisa (aleteo y onda en el agua), se lanza en picada, se queda un instante y sube. Con agua baja solo vuela.
-- Tiburon: vive en un hueco del suelo de S3 (`SHARK_DEN`). Si estas nadando cerca, sale, te acecha por debajo (aleta en la superficie), salta a morder en el punto donde estabas y vuelve al hueco. Se repite cada 4-6 s mientras sigas nadando cerca. Con el agua baja nunca sale.
-
-## v7
-- Corregido: el reinicio (tecla R, boton del final) fallaba desde v4 porque la textura de la luz se creaba otra vez al reiniciar la escena.
-
-## v8
-- Vista de hitboxes: tecla H (o ?debug=hitboxes). Verde = cuerpo fisico del jugador, amarillo = caja de dano del jugador, rojo = pinchos, naranja = enemigos, azul = bloques solidos.
-
-## v9: hitboxes alineadas al dibujo
-- La caja de dano del jugador sigue al sprite: de pie cubre torso y piernas (~22x69), nadando cubre el cuerpo que asoma sobre el agua (~79 px de ancho). El cuerpo fisico (movimiento y bloques) no cambio.
-- Pinchos: la hitbox mide lo mismo que se dibuja (SPIKE_H = 26 px).
-
-## v10
-- Al morir se reinician todos los enemigos (cangrejo, pelicano) antes de reaparecer en el checkpoint.
-- Tiburon apagado (`SHARK_ON = false` en game.js). El codigo sigue ahi para activarlo mas adelante.
-
-## v8: enemigos y ambiente
-- Cangrejo (de frente, dos pinzas con muesca, patas articuladas) y ave carroñera (cuello pelado, pico ganchudo, alas con plumas separadas) redibujados como siluetas con ojos que brillan. Cajas de dano: cangrejo 56x22, ave en picada 26x84 (activa "Mostrar hitboxes" en Ajustes para verlas).
-- Decoración estilo Limbo (solo adorno, sin colisión): ramas secas, telarañas, cadenas colgando, arañas en hilo, huesos de pez y niebla baja. Con `?look=color` (condición de control) no se dibuja.
-- Techo izquierdo de S3 acortado a 3 casillas (igual que el derecho); el cuerpo físico al nadar cubre todo el dibujo para no traspasar torres.
-
-## v11: drenaje pluvial costero (solo decoracion)
-- Escenario: tunel de drenaje que desemboca al mar. Arcos de concreto, manchas de humedad, rejillas oxidadas, numeros de seccion (en ingles) y tuberias viejas en el fondo.
-- Quitado: arboles y ramas de pie, telaranas sobre torres y techos solidos, niebla. Reducido: 4 telaranas en esquinas altas, 2 aranas pegadas al techo, 4 cadenas cortas, 5 raices cortas.
-- Basura de mar: conchas y redes viejas; los peces muertos (esqueletos grandes y claros: craneo, columna, costillas y cola) quedan solo junto al pelicano (S2, columnas 13-17).
-- Limo, algas y percebes en la base de torres y pozos. Goteras del techo con ondas en el agua. Vapor de humedad muy tenue.
-- Luz por seccion: S1 gris oscura, S2 verdosa, S3 azul; la meta tiene luz de afuera. `?look=color` sigue mostrando el fondo original.
-
-## v12
-- Salto un poco mas alto: `JUMP_V` de -353 a -385 (altura ~52 px -> ~62 px). El cangrejo conserva su tamano y su caja de dano; el margen para saltarlo sube de ~16 px a ~32 px. Se dejo en 62 px (no mas) para que el salto bajo los pinchos de techo de S3 siga libre con el agua baja.
-
-## v13: cangrejo mas vivo
-- Camina de lado a rafagas (arranca y frena con inercia, se detiene a acicalarse, saludar con la pinza o mirar). Ciclo de patas ligado a la distancia (los pies no patinan), cuerpo que se mece, ojos que siguen al jugador.
-- Si te acercas (~230 px) levanta las pinzas y chasquea (con sonido). Al llegar al limite de su ruta duda y da la vuelta.
-- Agua: al llegarle se sobresalta (salto, pinzas arriba, burbujas y arena). Sumergido esta mas activo, flota con las pinzas en alto, suelta burbujas que revientan en la superficie y de vez en cuando nada un saltito. Al irse el agua se sacude.
-- Se dibuja detras del agua, asi que lo que queda bajo la superficie se ve sumergido.
-- Jugabilidad: misma caja de dano (56x22) y misma velocidad media; la caja sube con el cuerpo si salta nadando.
-
-## Vercel Speed Insights
-- `index.html` incluye el snippet de Speed Insights para sitios estaticos (sin npm). En Vercel: Speed Insights > Enable en el proyecto, `vercel --prod`, visita el sitio y espera ~30 s. En local el script da 404, es normal y no afecta al juego.
-
-## v14: pelicano mas vivo
-- Vuela aleteando siempre (sin planeo); el cuerpo sube con cada aleteo y se inclina al despegar. Al dar la vuelta se achica y se voltea suavemente en vez de cambiar de golpe.
-- Avisa cerniendose con aleteo rapido, la cabeza baja mirando el agua y un graznido. En picada deja lineas de velocidad; al entrar al agua y al salir hay ondas, y al despegar sacude gotas.
-- Sonido: soplido por aleteo y graznido de aviso (suenan segun la cercania).
-- Jugabilidad igual: mismos tiempos, misma picada y misma caja de dano (26x84 en picada).
-
-## v8: agua con fisica (`water.js`)
-- El agua ya no tiene un nivel fijo por zona: es una altura por columna de 20 px que fluye sola de lo alto a lo bajo (aguas poco profundas). Las torres grandes la frenan; lo demas se mueve como ola.
-- Cada tapon es un desague en su propio sitio. Abierto, el agua cercana baja primero y el resto llega por la corriente (se ve la superficie inclinada y rayitas de espuma).
-- Cada tuberia vierte en su columna, pero solo mientras todos los tapones de su tramo (entre torres) estan puestos. Con alguno abierto, la tuberia cae al desague sin subir el agua.
-- El tapon de la derecha del pozo de la seccion 2 (`PLUG_START_CLOSED` en game.js) empieza ya puesto: solo hay que tapar el de la izquierda para que suba el agua y se cruce nadando, sin saltar el pozo. Para que otro tapon empiece puesto, agregalo a esa lista.
-- Flotar quieto: si el personaje esta en el agua y no se mueve (~0.35 s), deja la brazada horizontal y se queda de pie en el agua (a su tamaño normal): torso y cabeza fuera, piernas y pies sumergidos (mas transparentes y azulados), y los brazos se mueven poco, en contrafase y con el codo flexionado. Son 4 cuadros nuevos `sw14`-`sw17` (sprites.js) generados a partir del cuadro `idle0`; `TREAD_MS` controla la velocidad. En agua poco profunda el dibujo se recorta para que las piernas no atraviesen el piso. Al moverse vuelve a la brazada normal.
-- Un desague abierto no se puede tapar con agua corriendo por encima de ~22 px (`CLOSE_MAX_H`); el aviso muestra `...` hasta que baje.
-- Ajustes en `WATER` (water.js): `QIN` caudal de tuberia, `QOUT` caudal de desague, `G` velocidad de la ola, `DAMP` friccion. `PLUG_LOCK` (game.js) es la espera tras jalar.
-- Personaje, cangrejo, pelicano, gotas y aviso de pinchos de techo leen el nivel del punto donde estan, no de la zona.
-
-## v15: barra de vida
-- Barra de 2 mitades arriba (bajo el contador). El cangrejo quita media barra, empuja hacia atras y da 1.5 s de invulnerabilidad (parpadeo). Pinchos, pelicano, tiburon y caida matan al instante. La barra se llena al reaparecer y al tocar una bandera. `HP_MAX` y `HURT_MS` en game.js. Evento `hurt` en el registro.
-
-- Nado con minimo de agua: solo nada si el agua esta al 35% o mas (`SWIM_ENTER`); ya nadando, sigue hasta que baje de 25% (`SWIM_EXIT`). Con menos agua camina normal (animacion de pie/correr).
-
-## v16: control (gamepad)
-- Con control los globos de boton aparecen junto a Ajustes (Start/Menu/Options), Silencio (Select/View/Share), Jugar (A/✕), Ajustes del titulo (X/□), Cerrar (B/○) y Jugar de nuevo. Las pistas de los tapones muestran X o □ en vez de E.
-- Detecta Xbox o PlayStation por el id del control (otros se tratan como Xbox). Cambia a teclado al pulsar una tecla o el raton.
-- Start/Menu abre y cierra Ajustes, Select/View silencia, Y/△ reinicia el nivel (antes Start). Titulo: A o Start juega, X abre Ajustes.
-
-- Flotar quieto: caja de dano mas grande (`TREAD_HIT_W` 1.3x de ancho, `TREAD_HIT_DEEP` 22 px bajo la superficie, y 6 px mas arriba de la cabeza); el cuerpo fisico tambien algo mas ancho. Activa Mostrar hitboxes (H) para verla.
-
-## v17: menu, niveles, luces y mas
-- **Menu de inicio nuevo**: olas animadas, burbujas y botones Play / Settings. Cualquier tecla (o A) pasa a la seleccion de nivel.
-- **Seleccion de nivel**: tarjetas (Tutorial jugable; Level 2 y 3 bloqueados, "Coming soon"). Guarda mejor tiempo, fallos y gema en `localStorage['tidewater_progress']`. El nivel actual se llama **Tutorial** y muestra su titulo al empezar (`LEVELS` en game.js).
-- Desde Ajustes (y la pantalla final) hay boton **Level select** para salir al menu.
-- **Menus con teclado, mouse y control**: flechas / cruceta / stick mueven la seleccion, Enter / A acepta, Esc / B vuelve. En Ajustes izq/der cambia sliders y casillas. Start/Menu abre Ajustes; en la pantalla final, Start vuelve al menu.
-- **Luz que titila**: temblor leve siempre, rafagas con chispazo; mas seguidas con agua alta y mucho mas cuando avisa el pelicano o los pinchos de techo.
-- **Vida baja** (1 mitad): barra y vineta roja que laten, con sonido de latido.
-- **Reacciones**: pose y destello rojo al ser golpeado, chapuzon al entrar al agua, mas polvo en caidas largas.
-- **Sonido**: gotas del techo con eco (segun distancia), pasos secos o chapoteo en agua baja, sonido propio de golpe.
-- **Aviso de checkpoint**: "Checkpoint" o "Checkpoint · Health restored", con destello.
+## Cambios para la Actividad 03
+- El nivel pasó a un mapa de texto en `level.js`.
+- Las constantes de física quedaron juntas al inicio de `game.js`.
+- Se quitó el texto del nivel: la "E" del tapón (ahora es un anillo de luz), el aviso de checkpoint y el título del nivel.
+- Se agregó el cronómetro opcional en Ajustes.
+- Se agregó Vercel Speed Insights en `index.html`. En local da 404 y no afecta al juego.

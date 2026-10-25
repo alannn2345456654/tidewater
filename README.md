@@ -1,23 +1,30 @@
-# Tidewater (Level 1 – digital prototype)
+# Tidewater
 
-2D platformer built with Phaser 3 (included in `vendor/`). One mechanic: pull the drain plugs to raise or lower the water.
-Playable link: https://tidewater-r.vercel.app/
+Level 1 of a 2D platformer made with Phaser 3. The player pulls plugs to raise or lower the water, and uses the water to get past walls, pits and spikes.
 
-## How to run
-No install needed to play: open the link above in Chrome (desktop).
-To run locally from this folder: `npx serve .` (or `python3 -m http.server 8000`) and open the address it prints.
+Play it here (Chrome, desktop): https://tidewater-r.vercel.app/
 
-Controls: ← → / A D move · ↑ / W / Space jump · E (or ↓ / S) pull a plug · R restart.
-Settings (gear button or Esc): music, effects, mute, hitboxes and an optional **timer** (off by default) that shows the elapsed time during the level.
+## Run it on your computer
+Open a terminal in this folder and run `npx serve .`, then open the address it shows.
+(`python3 -m http.server 8000` also works.)
 
-## Where to edit the level
-- **Level map: `level.js`** – a text map (4 rows: `ceil`, `air`, `enemy`, `ground`) with the legend written at the top of the file. Edit a row, save and reload the page.
-  Example: change `W` to `#` in the `ground` row to remove a wall, or move a `P` to move a plug.
-- **Physics and feel: top of `game.js`** – `GRAVITY`, `SPEED`, `JUMP_V`, `COYOTE_S`, `BUFFER_S`, `PLUG_LOCK`, `HP_MAX`.
-- **Water behavior: `water.js`** – `WATER` constants (pipe flow, drain flow, wave speed).
-- Enemy speeds: `ENEMY_SPEED` in `level.js`. Which water zones start flooded: `START_HIGH` in `level.js`.
+## Controls
+- Move: arrow keys or A / D
+- Jump: up, W or space
+- Pull a plug: E (or down / S)
+- Restart: R
+- Settings: gear button or Esc. There you can turn on a timer.
+
+## Edit the level
+- The map is in `level.js`. It is a text map, and the symbols are explained at the top of the file. Change a row, save, and reload the page.
+- Physics (gravity, jump, speed, coyote time) are constants at the top of `game.js`.
+- The water speed is in `water.js`.
 
 ## Files
-`index.html` (page and menus) · `level.js` (map) · `game.js` (game logic, constants at the top) · `water.js` (water simulation) · `sprites.js` (character frames) · `vendor/` (Phaser).
-
-Extra URL options used for the Activity 01 experiment (`?cues=inconsistent`, `?warn=off`, `?look=color`, `?sound=off`) and the full version log are in `HISTORIAL.md`.
+- `index.html`: the page and menus
+- `level.js`: the level map
+- `game.js`: the game code
+- `water.js`: the water simulation
+- `sprites.js`: the character drawings
+- `vendor/`: Phaser
+- `HISTORIAL.md`: notes about the changes we made (in Spanish)
