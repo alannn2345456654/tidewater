@@ -68,4 +68,4 @@ Supabase table:
 - The physics constants are together at the top of `game.js`.
 - We removed the text from the level: the "E" on the plugs (now it is a glowing ring), the checkpoint message and the level title.
 - We added the optional timer in Settings.
-- We added Vercel Speed Insights in `index.html`. It gives a 404 when running locally and does not affect the game.
+- We added Vercel Speed Insights in `index.html`. It only loads when the game is hosted (not on localhost), and an ad blocker may block it without affecting the game. We also added an inline favicon so there is no `/favicon.ico` 404.

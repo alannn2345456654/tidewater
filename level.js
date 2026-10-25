@@ -1,17 +1,17 @@
 'use strict';
-/* MAPA DEL NIVEL
-   Edita las filas, guarda y recarga la pagina. No hace falta tocar game.js.
-   Son 3 secciones de 18 columnas. El '|' solo separa secciones.
+/* LEVEL MAP
+   Edit the rows, save and reload the page. You do not need to touch game.js.
+   There are 3 sections of 18 columns. The '|' only separates sections.
 
-   ceil    v = pinchos de techo, T = tuberia
-   air     o = moneda arriba (altura del agua alta), c = moneda en el piso
-   enemy   C = cangrejo, B = pelicano (el largo de la racha es su recorrido)
-   ground  # = suelo, ^ = pozo con pinchos, G = pilar con la gema (dentro de un pozo),
-           W = muro, P = tapon, p = tapon ya puesto, F = bandera (checkpoint), X = meta
+   ceil    v = ceiling spikes, T = pipe
+   air     o = coin up high (high water height), c = coin on the floor
+   enemy   C = crab, B = pelican (the length of the run is its patrol range)
+   ground  # = floor, ^ = spike pit, G = gem pillar (inside a pit),
+           W = wall, P = plug, p = plug already in, F = flag (checkpoint), X = goal
 */
 
 const LEVEL_MAP = {
-  //        SECCION 1          SECCION 2          SECCION 3
+  // SECTION 1          SECTION 2          SECTION 3
   //        123456789012345678 123456789012345678 123456789012345678
   ceil:   '.T..........T.....|..................|...vvv...T....vvv.',
   air:    '...oooo...........|...ooooo..........|...ccc..oooo......',
@@ -19,13 +19,13 @@ const LEVEL_MAP = {
   ground: 'F#P##W############|FP#^^G^^#p#W######|FP#####P^^^^P####X'
 };
 
-// zonas de agua (separadas por los muros). true = empieza con agua alta
+// water zones (separated by the walls). true = starts with high water
 const START_HIGH = [false, false, true];
 
-// velocidad de los enemigos (px/s)
+// enemy speed (px/s)
 const ENEMY_SPEED = { crab: 55, pelican: 75 };
 
-// lee el mapa y arma las listas que usa game.js
+// reads the map and builds the lists that game.js uses
 const LEVEL = (function () {
   const rows = {};
   Object.keys(LEVEL_MAP).forEach(function (k) { rows[k] = LEVEL_MAP[k].replace(/[|\s]/g, ''); });
@@ -38,7 +38,7 @@ const LEVEL = (function () {
   const L = { sections: SECTIONS, secCols: COLS, pits: [], walls: [], plugs: [], plugsClosed: [], ceil: [], pipes: [],
               coins: [], enemies: [], flags: [], goal: null, gem: null };
 
-  // busca rachas de simbolos dentro de una seccion
+  // finds runs of symbols within a section
   function runs(row, s, chars, fn) {
     let a = null;
     for (let c = 1; c <= COLS + 1; c++) {

@@ -1,14 +1,14 @@
 'use strict';
-/* Agua en 1D: una altura por cada columna de 20 px.
-   El agua fluye de lo alto a lo bajo, los muros la frenan,
-   las tuberias la agregan y cada tapon abierto la saca. */
+/* 1D water: one height for each 20 px column.
+   Water flows from high to low, walls stop it,
+   pipes add to it and each open plug drains it. */
 const WATER = {
-  CW: 20,            // ancho de columna (px)
-  G: 3000,           // gravedad del agua (velocidad de la ola)
-  DAMP: 0.8,         // friccion
-  SUB: 1 / 120,      // paso de simulacion (s)
-  QIN: 12000,        // caudal de cada tuberia (sube = se llena mas rapido)
-  QOUT: 60000        // caudal de cada desague abierto
+  CW: 20,            // column width (px)
+  G: 3000,           // water gravity (wave speed)
+  DAMP: 0.8,         // friction
+  SUB: 1 / 120,      // simulation step (s)
+  QIN: 12000,        // flow of each pipe (higher = fills faster)
+  QOUT: 60000        // flow of each open drain
 };
 
 function makeWater(len, low, high, solidRanges) {
@@ -18,7 +18,7 @@ function makeWater(len, low, high, solidRanges) {
   const col = function (x) { return Math.max(0, Math.min(N - 1, Math.floor(x / CW))); };
   return {
     N: N, h: h, f: f, solid: solid, low: low, high: high, CW: CW, acc: 0, col: col,
-    // altura del agua en x
+    // water height at x
     at: function (x) {
       const u = x / CW - 0.5, i = Math.floor(u), t = u - i;
       const a = h[Math.max(0, Math.min(N - 1, i))], b = h[Math.max(0, Math.min(N - 1, i + 1))];
@@ -26,10 +26,10 @@ function makeWater(len, low, high, solidRanges) {
       if (sa && !sb) return b; if (sb && !sa) return a;
       return a + (b - a) * t;
     },
-    // 0 = bajo, 1 = alto
+    // 0 = low, 1 = high
     level: function (x) { return Math.max(0, Math.min(1, (this.at(x) - low) / (high - low))); },
     fill: function (x0, x1, lvl) { for (let i = col(x0); i <= col(x1 - 1); i++) if (!solid[i]) h[i] = low + (high - low) * lvl; },
-    // fuentes y desagues: [{x, q}]
+    // sources and drains: [{x, q}]
     step: function (dt, sources, sinks) {
       this.acc += dt;
       while (this.acc >= WATER.SUB) { this.acc -= WATER.SUB; this.sub(WATER.SUB, sources, sinks); }
@@ -40,7 +40,7 @@ function makeWater(len, low, high, solidRanges) {
         if (solid[i - 1] || solid[i]) { f[i] = 0; continue; }
         const hh = Math.max(h[i - 1], h[i]);
         let q = (f[i] + G * hh * (h[i - 1] - h[i]) / CW * dt) * damp;
-        const lim = q > 0 ? (h[i - 1] - low) * CW / dt * 0.5 : (h[i] - low) * CW / dt * 0.5;   // no baja del nivel minimo
+        const lim = q > 0 ? (h[i - 1] - low) * CW / dt * 0.5 : (h[i] - low) * CW / dt * 0.5;   // does not go below the minimum level
         if (q > lim && q > 0) q = lim; else if (q < -lim && q < 0) q = -lim;
         f[i] = q;
       }
