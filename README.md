@@ -27,4 +27,4 @@ Open a terminal in this folder and run `npx serve .`, then open the address it s
 - `water.js`: the water simulation
 - `sprites.js`: the character drawings
 - `vendor/`: Phaser
-- `HISTORIAL.md`: notes about the changes we made (in Spanish)
+- `HISTORIAL.md`: notes about the changes we made

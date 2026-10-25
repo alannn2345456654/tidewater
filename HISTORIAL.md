@@ -1,59 +1,59 @@
-# Historial de cambios
+# Change log
 
-Notas de lo que se fue agregando al juego. No es parte de las instrucciones, solo para acordarnos.
+Notes about what we added to the game. These are not instructions, just so we remember.
 
-## Lo básico
-- El nivel tiene 3 secciones de 18 columnas. Está hecho con Phaser 3 y no necesita build.
-- Cada tapón abre o cierra su desagüe. Las tuberías siempre echan agua, pero solo suben el nivel si todos los tapones de su tramo están puestos.
-- Los muros son 36 px más altos que el agua alta, así que el agua nunca los pasa. Con agua alta se puede trepar al muro flotando junto a él.
-- El tapón de la derecha del pozo de la sección 2 empieza puesto, para no tener que saltar el pozo. Esto se cambia con la letra `p` en `level.js`.
+## Basics
+- The level has 3 sections of 18 columns. It is made with Phaser 3 and needs no build step.
+- Each plug opens or closes its own drain. The pipes always pour water, but they only raise the level if every plug in their stretch is in.
+- The walls are 36 px taller than the high water, so the water never goes over them. With high water you can climb a wall by floating next to it.
+- The plug on the right side of the pit in section 2 starts already in, so the player does not have to jump the pit. You can change this with the letter `p` in `level.js`.
 
-## Agua (water.js)
-- El agua ya no tiene un nivel fijo. Cada columna de 20 px tiene su altura y el agua fluye de lo alto a lo bajo.
-- Se puede ajustar con `QIN` (tuberías), `QOUT` (desagües), `G` (velocidad de la ola) y `DAMP` (fricción).
-- Un desagüe abierto no se puede tapar mientras pasa mucha agua por encima (`CLOSE_MAX_H`).
-- Después de jalar un tapón hay que esperar un momento (`PLUG_LOCK`).
+## Water (water.js)
+- The water no longer has a fixed level. Each 20 px column has its own height, and the water flows from high to low.
+- You can tune it with `QIN` (pipes), `QOUT` (drains), `G` (wave speed) and `DAMP` (friction).
+- An open drain can't be plugged while a lot of water is running over it (`CLOSE_MAX_H`).
+- After pulling a plug you have to wait a moment (`PLUG_LOCK`).
 
-## Personaje
-- Salto: `JUMP_V` pasó de -353 a -385 para que se pueda saltar al cangrejo con más margen. No se subió más porque tiene que seguir pasando bajo los pinchos de techo.
-- Vida de 2 mitades (`HP_MAX`). El cangrejo quita media y lo demás mata. Después de un golpe hay 1.5 s sin daño (`HURT_MS`).
-- Solo nada si el agua está al 35% o más (`SWIM_ENTER`) y deja de nadar abajo del 25% (`SWIM_EXIT`).
-- Si se queda quieto en el agua, se para en el agua en vez de nadar.
-- Las cajas de daño siguen al dibujo. Se pueden ver con la tecla H.
+## Player
+- Jump: `JUMP_V` went from -353 to -385 so there is more room to jump over the crab. We did not raise it more because the player still has to fit under the ceiling spikes.
+- Health has 2 halves (`HP_MAX`). The crab takes half and everything else kills. After a hit there are 1.5 s without damage (`HURT_MS`).
+- The player only swims if the water is at 35% or more (`SWIM_ENTER`) and stops swimming below 25% (`SWIM_EXIT`).
+- If the player stands still in the water, they stand upright instead of swimming.
+- The damage boxes follow the drawing. You can see them with the H key.
 
-## Enemigos
-- Cangrejo: camina por el suelo, se asusta cuando le llega el agua y levanta las pinzas si te acercas.
-- Pelícano: vuela alto. Con agua alta avisa y se lanza en picada.
-- Tiburón: está programado pero apagado (`SHARK_ON = false`).
-- Si mueres, los enemigos vuelven a su lugar.
+## Enemies
+- Crab: walks on the ground, gets scared when the water reaches it, and raises its claws when you get close.
+- Pelican: flies high. With high water it warns you and then dives.
+- Shark: it is coded but turned off (`SHARK_ON = false`).
+- When you die, the enemies go back to their start position.
 
-## Pistas y sonido
-- Los pinchos de techo parpadean cuando el agua está alta y suena un tic al acercarse.
-- El sonido y la música se generan con WebAudio, sin archivos. Se pueden bajar o apagar en Ajustes (tecla M).
-- Al tocar una bandera se llena la vida y sale un destello.
+## Cues and sound
+- The ceiling spikes blink when the water is high, and a tick sounds when you get close.
+- Sound and music are made with WebAudio, with no files. You can turn them down or off in Settings (M key).
+- Touching a flag refills health and shows a flash.
 
-## Estilo
-- Fondo oscuro de túnel de drenaje, con luz alrededor del personaje.
-- La decoración no tiene colisión: arcos, rejillas, tuberías viejas, algas, goteras y telarañas.
+## Style
+- Dark drainage tunnel background, with a light around the player.
+- The decoration has no collision: arches, grates, old pipes, algae, drips and cobwebs.
 
-## Menús
-- Pantalla de título y selección de nivel. Por ahora solo está el Tutorial.
-- Ajustes con música, efectos, silencio, hitboxes y cronómetro.
-- Funciona con teclado, mouse y control (Xbox o PlayStation).
+## Menus
+- Title screen and level select. Right now only the Tutorial is available.
+- Settings with music, effects, mute, hitboxes and timer.
+- Works with keyboard, mouse and gamepad (Xbox or PlayStation).
 
-## Opciones por URL (para el experimento de la Actividad 01)
-- `?cues=inconsistent`: los peligros cambian de color y forma. Sin esto, todos son rojos.
-- `?warn=off`: sin el aviso de los pinchos de techo.
-- `?look=color`: colores originales, sin el estilo oscuro.
-- `?sound=off`: sin sonido.
-- `?debug=hitboxes`: muestra las hitboxes.
+## URL options (for the Activity 01 experiment)
+- `?cues=inconsistent`: the hazards change color and shape. Without it, they are all red.
+- `?warn=off`: no warning on the ceiling spikes.
+- `?look=color`: original colors, without the dark style.
+- `?sound=off`: no sound.
+- `?debug=hitboxes`: shows the hitboxes.
 
-## Registro de datos (opcional)
-Si se llena `SUPABASE_URL` y `SUPABASE_ANON_KEY` al inicio de `game.js`, los eventos se mandan a Supabase. Si no, se guardan en `localStorage['tidewater_events']`.
+## Data logging (optional)
+If you fill in `SUPABASE_URL` and `SUPABASE_ANON_KEY` at the top of `game.js`, the events are sent to Supabase. If not, they are saved in `localStorage['tidewater_events']`.
 
-Eventos: `session_start`, `plug_pull`, `death`, `hurt`, `gem`, `goal` y `rating`.
+Events: `session_start`, `plug_pull`, `death`, `hurt`, `gem`, `goal` and `rating`.
 
-Tabla de Supabase:
+Supabase table:
 
     create table events (
       id bigint generated always as identity primary key,
@@ -63,9 +63,9 @@ Tabla de Supabase:
     alter table events enable row level security;
     create policy "anon insert" on events for insert to anon with check (true);
 
-## Cambios para la Actividad 03
-- El nivel pasó a un mapa de texto en `level.js`.
-- Las constantes de física quedaron juntas al inicio de `game.js`.
-- Se quitó el texto del nivel: la "E" del tapón (ahora es un anillo de luz), el aviso de checkpoint y el título del nivel.
-- Se agregó el cronómetro opcional en Ajustes.
-- Se agregó Vercel Speed Insights en `index.html`. En local da 404 y no afecta al juego.
+## Changes for Activity 03
+- The level is now a text map in `level.js`.
+- The physics constants are together at the top of `game.js`.
+- We removed the text from the level: the "E" on the plugs (now it is a glowing ring), the checkpoint message and the level title.
+- We added the optional timer in Settings.
+- We added Vercel Speed Insights in `index.html`. It gives a 404 when running locally and does not affect the game.
