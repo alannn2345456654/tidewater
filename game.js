@@ -8,7 +8,7 @@ const SUPABASE_ANON_KEY = '';  // public anon key
 // CONSTANTS. The map is in level.js
 // Physics
 const GRAVITY = 1200;        // gravity (px/s^2)
-const SPEED = 170;           // walking speed (px/s)
+const SPEED = 180;           // walking speed (px/s)
 const JUMP_V = -385;         // jump force (negative = up)
 const COYOTE_S = 0.09;       // coyote time: grace period after leaving the ledge (s)
 const BUFFER_S = 0.12;       // input buffering: jump pressed slightly early (s)
@@ -609,7 +609,6 @@ class Level extends Phaser.Scene {
     for (let i = 0; i < 16; i++) drawStain(back, 40 + i * (LW / 16) + rnd() * 90, 70 + rnd() * 240, 60 + rnd() * 70, 40 + rnd() * 50);
     for (let s = 0; s < NSEC; s++) {
       drawGrate(back, colx(s, 1) + 190 + (s === 1 ? 20 : 0), 52, 46, 22);
-      this.add.text(colx(s, 1) + 30, 56, 'SECTION ' + (s + 1), { fontFamily: 'monospace', fontSize: '12px', color: '#8f7f66' }).setAlpha(0.45).setDepth(0.45);
     }
     // old pipes in the background
     back.fillStyle(0x4a3424, 0.7);
