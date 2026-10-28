@@ -28,3 +28,8 @@ Open a terminal in this folder and run `npx serve .`, then open the address it s
 - `sprites.js`: the character drawings
 - `vendor/`: Phaser
 - `HISTORIAL.md`: notes about the changes we made
+
+## Credits
+- Art: pixel-art sprite sheet generated with Easy-Peasy.AI (CC BY 4.0). The player character and its movement were generated with Gemini from that sheet, and the run cycle and enemy sprites were finished with AI from my design drafts.
+- Code: written with an AI assistant (Phaser 3) from my design decisions. Game design, map, hazard placement and physics values are mine.
+- Engine: [Phaser 3](https://phaser.io/) (in `vendor/`).
