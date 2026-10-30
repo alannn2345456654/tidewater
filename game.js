@@ -1,9 +1,9 @@
 'use strict';
 /* Tidewater (Phaser 3). A plug opens or closes its drain and the water rises or falls (water.js). */
 
-// Supabase (optional): fill these two values to save the events online
-const SUPABASE_URL = '';       // e.g. https://xxxx.supabase.co
-const SUPABASE_ANON_KEY = '';  // public anon key (publishable key)
+// Supabase 
+const SUPABASE_URL = 'https://ypiwvlgwhfuiclkgrazm.supabase.co';       
+const SUPABASE_ANON_KEY = 'sb_publishable_K2bL9fvwQbz4zDlhRSPBpA_d65ANGnt';  
 
 // CONSTANTS. The map is in level.js
 // Physics
