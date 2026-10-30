@@ -48,20 +48,10 @@ Notes about what we added to the game. These are not instructions, just so we re
 - `?sound=off`: no sound.
 - `?debug=hitboxes`: shows the hitboxes.
 
-## Data logging (optional)
-If you fill in `SUPABASE_URL` and `SUPABASE_ANON_KEY` at the top of `game.js`, the events are sent to Supabase. If not, they are saved in `localStorage['tidewater_events']`.
+## Data logging
+The events are saved only in the browser, in `localStorage['tidewater_events']` (the last 500). Nothing is sent to any server.
 
 Events: `session_start`, `plug_pull`, `death`, `hurt`, `gem`, `goal` and `rating`.
-
-Supabase table:
-
-    create table events (
-      id bigint generated always as identity primary key,
-      created_at timestamptz default now(),
-      session_id text, variant text, type text, data jsonb, t integer
-    );
-    alter table events enable row level security;
-    create policy "anon insert" on events for insert to anon with check (true);
 
 ## Changes for Activity 03
 - The level is now a text map in `level.js`.

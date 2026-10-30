@@ -1,10 +1,6 @@
 'use strict';
 /* Tidewater (Phaser 3). A plug opens or closes its drain and the water rises or falls (water.js). */
 
-// Supabase (optional)
-const SUPABASE_URL = '';       // e.g. https://xxxx.supabase.co
-const SUPABASE_ANON_KEY = '';  // public anon key
-
 // CONSTANTS. The map is in level.js
 // Physics
 const GRAVITY = 1200;        // gravity (px/s^2)
@@ -220,14 +216,6 @@ function log(type, data) {
     a.push(row);
     localStorage.setItem('tidewater_events', JSON.stringify(a.slice(-500)));
   } catch (e) { /* no storage: ignored */ }
-  if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-    fetch(SUPABASE_URL + '/rest/v1/events', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY,
-                 Authorization: 'Bearer ' + SUPABASE_ANON_KEY, Prefer: 'return=minimal' },
-      body: JSON.stringify(row), keepalive: true
-    }).catch(function () {});
-  }
 }
 
 // Touch controls (DOM)
